@@ -1,4 +1,7 @@
-add_executable(pc_portability_tests portability_tests.c)
+add_executable(pc_portability_tests
+    portability_tests.c
+    ../../src/TwoHeadArena.c
+)
 
 target_include_directories(pc_portability_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../../include

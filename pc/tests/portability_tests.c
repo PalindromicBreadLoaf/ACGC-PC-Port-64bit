@@ -6,6 +6,7 @@
 #include "types.h"
 #include "PR/gbi.h"
 #include "PR/ultratypes.h"
+#include "TwoHeadArena.h"
 #include "dolphin/card.h"
 #include "dolphin/gx/GXStruct.h"
 #include "dolphin/mtx.h"
@@ -89,9 +90,62 @@ static int test_checked_narrowing(void) {
     return 0;
 }
 
+static uintptr_t align_down(uintptr_t value, uintptr_t alignment) {
+    return value & ~(alignment - 1u);
+}
+
+static uintptr_t align_up(uintptr_t value, uintptr_t alignment) {
+    return (value + alignment - 1u) & ~(alignment - 1u);
+}
+
+static int test_two_head_arena(void) {
+    char storage[257];
+    TwoHeadArena arena;
+    uintptr_t start = (uintptr_t)(storage + 1);
+    uintptr_t end = start + 256u;
+    uintptr_t expected;
+
+    THA_ct(&arena, storage + 1, 256u);
+    CHECK(arena.head_p == storage + 1);
+    CHECK(arena.tail_p == storage + 257);
+    CHECK(THA_getFreeBytes(&arena) == 256);
+
+    expected = align_down(align_down(end, 16u) - 17u, 16u);
+    CHECK((uintptr_t)THA_alloc16(&arena, 17u) == expected);
+    CHECK((uintptr_t)arena.tail_p == expected);
+    CHECK(((uintptr_t)arena.tail_p & 15u) == 0u);
+    CHECK(THA_getFreeBytes16(&arena) == (int)(expected - align_up(start, 16u)));
+
+    expected = align_down(align_down(expected, 32u) - 1u, 32u);
+    CHECK((uintptr_t)THA_allocAlign(&arena, 1u, ~31) == expected);
+    CHECK(((uintptr_t)arena.tail_p & 31u) == 0u);
+    CHECK(THA_getFreeBytesAlign(&arena, ~31) == (int)(expected - align_up(start, 32u)));
+
+    arena.head_p = arena.tail_p + 1;
+    CHECK(THA_getFreeBytes(&arena) == -1);
+    CHECK(THA_isCrash(&arena));
+
+    THA_init(&arena);
+    CHECK(arena.head_p == storage + 1);
+    CHECK(arena.tail_p == storage + 257);
+
+#if UINTPTR_MAX > UINT32_MAX
+    CHECK(((uintptr_t)arena.tail_p >> 32) != 0u);
+    CHECK(((uintptr_t)THA_alloc16(&arena, 16u) >> 32) == (end >> 32));
+#endif
+
+    THA_dt(&arena);
+    CHECK(arena.size == 0u);
+    CHECK(arena.buf_p == NULL);
+    CHECK(arena.head_p == NULL);
+    CHECK(arena.tail_p == NULL);
+    return 0;
+}
+
 int main(void) {
     CHECK(test_big_endian_loads() == 0);
     CHECK(test_big_endian_stores() == 0);
     CHECK(test_checked_narrowing() == 0);
+    CHECK(test_two_head_arena() == 0);
     return 0;
 }

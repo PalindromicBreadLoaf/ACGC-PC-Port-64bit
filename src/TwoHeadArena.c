@@ -1,6 +1,8 @@
 #include "TwoHeadArena.h"
 
+#ifndef TARGET_PC
 #include "libultra/libultra.h"
+#endif
 #include "types.h"
 
 /* @fabricated */
@@ -61,17 +63,40 @@ extern void* THA_alloc(TwoHeadArena* this, size_t siz) {
 
 extern void* THA_alloc16(TwoHeadArena* this, size_t siz) {
   const int mask = ~(16 - 1);
+#ifdef TARGET_PC
+  uintptr_t address_mask = (uintptr_t)(intptr_t)mask;
+  uintptr_t tail = (uintptr_t)this->tail_p & address_mask;
+  this->tail_p = (char*)((tail - siz) & address_mask);
+#else
   this->tail_p = (char*)((((u32)this->tail_p & mask) - siz) & mask);
+#endif
   return this->tail_p;
 }
 
 extern void* THA_allocAlign(TwoHeadArena* this, size_t siz, int mask) {
+#ifdef TARGET_PC
+  uintptr_t address_mask = (uintptr_t)(intptr_t)mask;
+  uintptr_t tail = (uintptr_t)this->tail_p & address_mask;
+  this->tail_p = (char*)((tail - siz) & address_mask);
+#else
   this->tail_p = (char*)((((u32)this->tail_p & mask) - siz) & mask);
+#endif
   return this->tail_p;
 }
 
 extern int THA_getFreeBytesAlign(TwoHeadArena* this, int mask) {
+#ifdef TARGET_PC
+  uintptr_t address_mask = (uintptr_t)(intptr_t)mask;
+  uintptr_t tail = (uintptr_t)this->tail_p;
+  uintptr_t head = ((uintptr_t)this->head_p + ~address_mask) & address_mask;
+
+  if (tail >= head) {
+    return (int)(tail - head);
+  }
+  return -(int)(head - tail);
+#else
   return (int)this->tail_p - (mask & (int)(this->head_p + ~mask));
+#endif
 }
 
 extern int THA_getFreeBytes16(TwoHeadArena* this) {
@@ -98,5 +123,9 @@ extern void THA_ct(TwoHeadArena* this, char* p, size_t n) {
 }
 
 extern void THA_dt(TwoHeadArena* this) {
+#ifdef TARGET_PC
+  memset(this, 0, sizeof(TwoHeadArena));
+#else
   bzero(this, sizeof(TwoHeadArena));
+#endif
 }
