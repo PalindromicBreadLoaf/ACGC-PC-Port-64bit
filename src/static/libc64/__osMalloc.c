@@ -6,13 +6,26 @@
 
 #define OS_MALLOC_MAGIC (s16)'ss' // magic number for an OSMemBlock
 #define OS_MALLOC_BLOCK_OK(block) ((block) != NULL && (block)->magic == OS_MALLOC_MAGIC) // check if OSMemBlock structure is OK
-#define OS_MALLOC_DATA2BLOCK(data) ((OSMemBlock*)((u32)(data) - sizeof(OSMemBlock))) // get memblock data pointer from OSMemBlock
-#define OS_MALLOC_BLOCK2DATA(block) ((u8*)(block) + sizeof(OSMemBlock)) // get OSMemBlock pointer from data
+#ifdef TARGET_PC
+#define OS_MALLOC_HEADER_SIZE ((u32)ALIGN_NEXT(sizeof(OSMemBlock), (size_t)32))
+#else
+#define OS_MALLOC_HEADER_SIZE sizeof(OSMemBlock)
+#endif
+#define OS_MALLOC_DATA2BLOCK(data) ((OSMemBlock*)((u8*)(data) - OS_MALLOC_HEADER_SIZE)) // get memblock data pointer from OSMemBlock
+#define OS_MALLOC_BLOCK2DATA(block) ((u8*)(block) + OS_MALLOC_HEADER_SIZE) // get OSMemBlock pointer from data
 
 // Gets the pointer to the next OSMemBlock immediately following this block in RAM, may or may not be a valid OSMemBlock
-#define OS_MALLOC_NEXTMEMBLOCK(block) ((OSMemBlock*)((u32)(block) + sizeof(OSMemBlock) + (block)->size))
+#define OS_MALLOC_NEXTMEMBLOCK(block) ((OSMemBlock*)((u8*)(block) + OS_MALLOC_HEADER_SIZE + (block)->size))
 
 int __osMalloc_FreeBlockTest_Enable = FALSE;
+
+static BOOL alignAllocationSize(u32 size, u32* alignedSize) {
+    if (size > 0x7FFFFFE0u) {
+        return FALSE;
+    }
+    *alignedSize = (size + 31u) & ~31u;
+    return TRUE;
+}
 
 static void setDebugInfo(OSMemBlock* block, const char* file, s32 line, OSArena* arena) {
     block->file = file;
@@ -84,19 +97,24 @@ extern void __osMallocInit(OSArena* arena, u8* base, s32 size) {
 }
 
 extern void __osMallocAddBlock(OSArena* arena, u8* base, s32 size) {
-    s32 align_size;
+    u32 align_size;
     OSMemBlock* block;
     OSMemBlock* last;
     
-    if (base != NULL) {
-        block = (OSMemBlock*)ALIGN_NEXT((u32)base, 32);
-        align_size = ALIGN_PREV(size - ((u32)block - (u32)base), 32);
+    if (base != NULL && size > 0) {
+        block = (OSMemBlock*)ALIGN_NEXT((uintptr_t)base, (uintptr_t)32);
+        u32 base_offset = (u32)((u8*)block - base);
+        if (base_offset >= (u32)size) {
+            return;
+        }
+        align_size = (u32)size - base_offset;
+        align_size = ALIGN_PREV(align_size, 32u);
 
-        if (align_size > (int)sizeof(OSMemBlock)) {
+        if (align_size > OS_MALLOC_HEADER_SIZE) {
             memset(block, 0xAB, align_size);
             block->next = NULL;
             block->prev = NULL;
-            block->size = align_size - sizeof(OSMemBlock);
+            block->size = align_size - OS_MALLOC_HEADER_SIZE;
             block->free = TRUE;
             block->magic = OS_MALLOC_MAGIC;
             
@@ -122,7 +140,7 @@ static void destroy_all_block(OSArena* arena) {
     block = arena->head;
     while (block != NULL) {
         next = get_block_next(block);
-        memset(block, 0xAB, block->size + sizeof(OSMemBlock));
+        memset(block, 0xAB, block->size + OS_MALLOC_HEADER_SIZE);
         block = next;
     }
     arena_unlock(arena);
@@ -160,16 +178,18 @@ static void __osMalloc_FreeBlockTest(OSArena* arena, OSMemBlock* block) {
 static void* __osMallocAlign_NoLock(OSArena* arena, u32 size, u32 align) {
     OSMemBlock* aligned_block;
     OSMemBlock* new_next;
-    int alignment_bytes;
+    u32 alignment_bytes;
     OSMemBlock* block;
     u8* data_p = NULL;
     OSMemBlock* next;
     u32 full_size;
     u32 mask;
-    int remain;
+    u32 remain;
 
-    size = ALIGN_NEXT(size, 32);
-    full_size = ALIGN_NEXT(size, 32) + sizeof(OSMemBlock);
+    if (!alignAllocationSize(size, &size)) {
+        return NULL;
+    }
+    full_size = size + OS_MALLOC_HEADER_SIZE;
 
     if (align <= 16) {
         align = 16;
@@ -191,9 +211,9 @@ static void* __osMallocAlign_NoLock(OSArena* arena, u32 size, u32 align) {
     mask = align - 1;
     while (block != NULL) {
         if (block->free) {
-            remain = ((u32)block + sizeof(OSMemBlock)) & mask;
+            remain = (u32)(((uintptr_t)block + OS_MALLOC_HEADER_SIZE) & mask);
             alignment_bytes = remain == 0 ? 0 : align - remain;
-            aligned_block = (OSMemBlock*)((u32)block + alignment_bytes);
+            aligned_block = (OSMemBlock*)((u8*)block + alignment_bytes);
 
             if (block->size - alignment_bytes >= size) {
                 if (arena->flags & OSArena_FLAG_FREE_BLOCK_TEST) {
@@ -217,7 +237,7 @@ static void* __osMallocAlign_NoLock(OSArena* arena, u32 size, u32 align) {
                 }
 
                 if (block->size > full_size) {
-                    new_next = (OSMemBlock*)((u32)block + full_size);
+                    new_next = (OSMemBlock*)((u8*)block + full_size);
                     new_next->next = get_block_next(block);
                     new_next->prev = block;
                     new_next->size = block->size - full_size;
@@ -273,8 +293,10 @@ extern void* __osMallocR(OSArena* arena, u32 size) {
     u8* ret = NULL;
     u32 full_size;
 
-    size = ALIGN_NEXT(size, 32);
-    full_size = ALIGN_NEXT(size, 32) + sizeof(OSMemBlock);
+    if (!alignAllocationSize(size, &size)) {
+        return NULL;
+    }
+    full_size = size + OS_MALLOC_HEADER_SIZE;
     arena_lock(arena);
     block = search_last_block(arena);
     while (block != NULL) {
@@ -284,7 +306,7 @@ extern void* __osMallocR(OSArena* arena, u32 size) {
             }
 
             if (block->size > full_size) {
-                next = (OSMemBlock*)((u32)block + block->size - size);
+                next = (OSMemBlock*)((u8*)block + block->size - size);
                 next->next = get_block_next(block);
                 next->prev = block;
                 next->size = size;
@@ -316,12 +338,13 @@ extern void* __osMallocR(OSArena* arena, u32 size) {
 }
 
 static void __osFree_NoLock(OSArena* arena, void* ptr) {
-    OSMemBlock* block = OS_MALLOC_DATA2BLOCK(ptr);
+    OSMemBlock* block;
     OSMemBlock* next;
     OSMemBlock* prev;
     OSMemBlock* temp;
 
     if (ptr != NULL) {
+        block = OS_MALLOC_DATA2BLOCK(ptr);
         if (!OS_MALLOC_BLOCK_OK(block)) {
             OSReport(VT_COL(RED, WHITE) "__osFree:不正解放(%08x)\n" VT_RST, ptr); // __osFree: irregular deallocation
             OSPanic(__FILE__, 738, "");
@@ -355,7 +378,7 @@ static void __osFree_NoLock(OSArena* arena, void* ptr) {
                     temp->prev = block;
                 }
 
-                block->size += next->size + sizeof(OSMemBlock);
+                block->size += next->size + OS_MALLOC_HEADER_SIZE;
                 if (arena->flags & OSArena_FLAG_CLEAR_MEM_ON_FREE) {
                     memset(next, 0xEF, sizeof(OSMemBlock));
                 }
@@ -370,7 +393,7 @@ static void __osFree_NoLock(OSArena* arena, void* ptr) {
             }
 
             prev->next = next;
-            prev->size += block->size + sizeof(OSMemBlock);
+            prev->size += block->size + OS_MALLOC_HEADER_SIZE;
             if (arena->flags & OSArena_FLAG_CLEAR_MEM_ON_FREE) {
                 memset(block, 0xEF, sizeof(OSMemBlock));
             }
@@ -391,6 +414,7 @@ static void* __osFree_NoLock_DEBUG(OSArena* arena, void* ptr) {
 
     // __osFree: double deallocation
     OSReport(VT_COL(RED, WHITE) "__osFree:二重解放(%08x) [%s:%d ]\n" VT_RST);
+    return NULL;
 }
 
 #pragma force_active on
@@ -403,9 +427,10 @@ extern void* __osRealloc(OSArena* arena, void* ptr, u32 size) {
     u32 full_size;
     u32 need_size;
 
-    orig_block = OS_MALLOC_DATA2BLOCK(ptr);
-    size = ALIGN_NEXT(size, 32);
-    full_size = ALIGN_NEXT(size, 32) + sizeof(OSMemBlock);
+    if (!alignAllocationSize(size, &size)) {
+        return NULL;
+    }
+    full_size = size + OS_MALLOC_HEADER_SIZE;
 
     arena_lock(arena);
 
@@ -414,12 +439,17 @@ extern void* __osRealloc(OSArena* arena, void* ptr, u32 size) {
     } else if (size == 0) {
         __osFree_NoLock(arena, ptr);
         ptr = NULL;
-    } else if (size != orig_block->size) {
+    } else {
+        orig_block = OS_MALLOC_DATA2BLOCK(ptr);
+        if (size == orig_block->size) {
+            arena_unlock(arena);
+            return ptr;
+        }
         if (size > orig_block->size) {
             next = get_block_next(orig_block);
             need_size = size - orig_block->size;
             if (next == OS_MALLOC_NEXTMEMBLOCK(orig_block) && next->free && next->size >= need_size) {
-                OSMemBlock* new_next = (OSMemBlock*)((u32)next + need_size);
+                OSMemBlock* new_next = (OSMemBlock*)((u8*)next + need_size);
                 next->size -= need_size;
                 temp = get_block_next(next);
                 if (temp != NULL) {
@@ -439,7 +469,7 @@ extern void* __osRealloc(OSArena* arena, void* ptr, u32 size) {
         } else if (size < orig_block->size) {
             next = get_block_next(orig_block);
             if (next != NULL && next->free) {
-                OSMemBlock* new_next = (OSMemBlock*)((u32)orig_block + full_size);
+                OSMemBlock* new_next = (OSMemBlock*)((u8*)orig_block + full_size);
                 *new_next = *next;
                 new_next->size += orig_block->size - size;
                 orig_block->next = new_next;
@@ -448,8 +478,8 @@ extern void* __osRealloc(OSArena* arena, void* ptr, u32 size) {
                 if (temp != NULL) {
                     temp->prev = new_next;
                 }
-            } else if (size + sizeof(OSMemBlock) < orig_block->size) {
-                new_next = (OSMemBlock*)((u32)orig_block + full_size);
+            } else if (size + OS_MALLOC_HEADER_SIZE < (u32)orig_block->size) {
+                new_next = (OSMemBlock*)((u8*)orig_block + full_size);
                 new_next->next = get_block_next(orig_block);
                 new_next->prev = orig_block;
                 new_next->size = orig_block->size - full_size;
@@ -461,8 +491,6 @@ extern void* __osRealloc(OSArena* arena, void* ptr, u32 size) {
                 if (temp != NULL) {
                     temp->prev = new_next;
                 }
-            } else {
-                ptr = NULL;
             }
         }
     }
@@ -552,7 +580,7 @@ extern s32 __osGetMemBlockSize(OSArena* arena, void* ptr) {
 
     block = OS_MALLOC_DATA2BLOCK(ptr);
     if (OS_MALLOC_BLOCK_OK(block)) {
-        return block->size;
+        return (s32)block->size;
     }
 
     return -1;
@@ -580,7 +608,7 @@ extern void __osDisplayArena(OSArena* arena) {
         while (block != NULL) {
             if (OS_MALLOC_BLOCK_OK(block)) {
                 next = block->next;
-                OSReport("%08x-%08x%c %s %08x", (u32)block, (u32)block + sizeof(OSMemBlock) + block->size, next == NULL ? '$' : (next->prev != block ? '!' : ' '), block->free ? "空き" : "確保", block->size);
+                OSReport("%p-%p%c %s %08x", block, (u8*)block + OS_MALLOC_HEADER_SIZE + block->size, next == NULL ? '$' : (next->prev != block ? '!' : ' '), block->free ? "空き" : "確保", block->size);
                 if (!block->free) {
                     // 空き = free, 確保 = used
                     OSReport(" [%016llu:%2d:%s:%d]", OSTicksToMicroseconds((u64)block->time * 1000), block->threadId, block->file != NULL ? block->file : "**NULL**", block->line);

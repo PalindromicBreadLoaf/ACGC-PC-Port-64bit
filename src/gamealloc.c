@@ -3,6 +3,10 @@
 #include "libc64/malloc.h"
 
 extern void* gamealloc_malloc(GameAlloc* gamealloc, size_t size) {
+  if (size > UINT32_MAX || size > SIZE_MAX - sizeof(GameAllocList)) {
+    return NULL;
+  }
+
   GameAllocList* alloc = (GameAllocList*)malloc(size + sizeof(GameAllocList));
 
   if (alloc != NULL) {
@@ -52,4 +56,6 @@ extern void gamealloc_init(GameAlloc* gamealloc) {
   gamealloc->tail = &gamealloc->head;
   gamealloc->head.next = gamealloc->tail;
   gamealloc->head.prev = gamealloc->tail;
+  gamealloc->head.alloc_size = 0;
+  gamealloc->head.pad = 0;
 }

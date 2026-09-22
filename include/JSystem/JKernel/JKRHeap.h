@@ -134,7 +134,7 @@ class JKRHeap : public JKRDisposer {
     u32 getMaxAllocatableSize(int alignment);
     JKRHeap* find(void*) const;        // 0x80084640
     JKRHeap* findAllHeap(void*) const; // 0x8008492c
-    void dispose_subroutine(u32 begin, u32 end);
+    void dispose_subroutine(void* begin, void* end);
     bool dispose(void*, u32);   // 0x80084b9c
     void dispose(void*, void*); // 0x80084c2c
     void dispose();             // 0x80084cb8

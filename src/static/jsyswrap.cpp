@@ -1,6 +1,7 @@
 #include "jsyswrap_cpp.h"
 
 #include "JSystem/JSystem.h"
+#include "JSystem/JKernel/JKRExpHeap.h"
 #include "JSystem/JUtility/JUTGamePad.h"
 #include "JSystem/JUtility/TColor.h"
 #include "libforest/emu64.h"
@@ -490,7 +491,10 @@ extern void JW_Init() {
     void* arena_hi = OSGetArenaHi();
     void* arena_lo = OSGetArenaLo();
 
-    SystemHeapSize = (u32)arena_hi - (u32)arena_lo - 0xD0;
+    size_t arena_size = (u8*)arena_hi - (u8*)arena_lo;
+    size_t heap_overhead = JKRExpHeap::getRuntimeOverhead();
+    JUT_ASSERT(arena_size > heap_overhead && arena_size - heap_overhead <= UINT32_MAX);
+    SystemHeapSize = static_cast<u32>(arena_size - heap_overhead);
     JC_JFWSystem_setMaxStdHeap(1);
     JC_JFWSystem_setSysHeapSize(SystemHeapSize);
     JC_JFWSystem_setFifoBufSize(0x10001);

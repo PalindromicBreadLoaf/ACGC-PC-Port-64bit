@@ -18,7 +18,11 @@ extern "C" {
 typedef struct OSMemBlock_ {
     /* 0x00 */ s16 magic;
     /* 0x02 */ s16 free;
+#ifdef TARGET_PC
+    /* 0x04 */ u32 size;
+#else
     /* 0x04 */ s32 size;
+#endif
     /* 0x08 */ struct OSMemBlock_* next;
     /* 0x0C */ struct OSMemBlock_* prev;
     /* 0x10 */ const char* file;

@@ -4,6 +4,8 @@
 #include "JSystem/JUtility/JUTConsole.h"
 #include "JSystem/JMacro.h"
 
+#include <climits>
+
 static u32 whatdo;
 static u32 whatdo2;
 static u32 DBfoundSize;
@@ -11,15 +13,44 @@ static u32 DBfoundOffset;
 static JKRExpHeap::CMemBlock* DBfoundBlock;
 static JKRExpHeap::CMemBlock* DBnewFreeBlock;
 static JKRExpHeap::CMemBlock* DBnewUsedBlock;
+static constexpr u32 RuntimeMemBlockSize = static_cast<u32>(sizeof(JKRExpHeap::CMemBlock));
+
+static uintptr_t alignDown(uintptr_t value, uintptr_t alignment) {
+    return value & ~(alignment - 1);
+}
+
+static uintptr_t alignUp(uintptr_t value, uintptr_t alignment) {
+    return (value + alignment - 1) & ~(alignment - 1);
+}
+
+static u32 pointerCheckCode(const void* pointer) {
+    uintptr_t value = reinterpret_cast<uintptr_t>(pointer);
+#if UINTPTR_MAX > UINT32_MAX
+    value ^= value >> 32;
+#endif
+    return static_cast<u32>(value) * 3;
+}
+
+u32 JKRExpHeap::getRuntimeOverhead() {
+    size_t overhead = 31u + alignUp(sizeof(JKRExpHeap), 0x10u) + RuntimeMemBlockSize;
+    JUT_ASSERT(overhead <= UINT32_MAX);
+    return static_cast<u32>(overhead);
+}
 
 JKRExpHeap* JKRExpHeap::createRoot(int maxHeaps, bool errorFlag) {
     JKRExpHeap* heap = nullptr;
     if (!sRootHeap) {
         void* memory;
         u32 memorySize;
-        initArena((char**)&memory, &memorySize, maxHeaps);
-        u8* start = (u8*)memory + ALIGN_NEXT(sizeof(JKRExpHeap), 0x10);
-        u32 alignedSize = memorySize - ALIGN_NEXT(sizeof(JKRExpHeap), 0x10);
+        if (!initArena((char**)&memory, &memorySize, maxHeaps)) {
+            return nullptr;
+        }
+        size_t heapObjectSize = ALIGN_NEXT(sizeof(JKRExpHeap), (size_t)0x10);
+        if (memorySize <= heapObjectSize + RuntimeMemBlockSize) {
+            return nullptr;
+        }
+        u8* start = (u8*)memory + heapObjectSize;
+        u32 alignedSize = static_cast<u32>(memorySize - heapObjectSize);
         heap = new (memory) JKRExpHeap(start, alignedSize, nullptr, errorFlag);
         sRootHeap = heap;
     }
@@ -33,20 +64,16 @@ JKRExpHeap* JKRExpHeap::create(u32 size, JKRHeap* parent, bool errorFlag) {
         parent = sRootHeap;
     }
 
-    u32 alignedSize = ALIGN_PREV(size, 0x10);
-    s32 expHeapSize = ALIGN_NEXT(sizeof(JKRExpHeap), 0x10);
-    if (alignedSize < 0x90)
+    u32 alignedSize = ALIGN_PREV(size, 0x10u);
+    u32 expHeapSize = static_cast<u32>(ALIGN_NEXT(sizeof(JKRExpHeap), (size_t)0x10));
+    if (alignedSize <= expHeapSize + RuntimeMemBlockSize)
         return nullptr;
 
     u8* memory = (u8*)JKRAllocFromHeap(parent, alignedSize, 0x10);
-    u8* dataPtr = memory + expHeapSize;
     if (!memory) {
         return nullptr;
     }
-    if ((int)(alignedSize - expHeapSize) < 0x10) {
-        JKRFree(memory);
-        return nullptr;
-    }
+    u8* dataPtr = memory + expHeapSize;
 
     newHeap = new (memory) JKRExpHeap(dataPtr, alignedSize - expHeapSize, parent, errorFlag);
     if (newHeap == nullptr) {
@@ -68,16 +95,15 @@ JKRExpHeap* JKRExpHeap::create(void* ptr, u32 size, JKRHeap* parent, bool errorF
     }
 
     JKRExpHeap* newHeap = nullptr;
-    u32 expHeapSize = ALIGN_NEXT(sizeof(JKRExpHeap), 0x10);
+    u32 expHeapSize = static_cast<u32>(ALIGN_NEXT(sizeof(JKRExpHeap), (size_t)0x10));
 
-    if (size < expHeapSize)
+    if (ptr == nullptr || size <= expHeapSize + RuntimeMemBlockSize)
         return nullptr;
 
     void* dataPtr = (u8*)ptr + expHeapSize;
-    u32 alignedSize = ALIGN_PREV((u32)ptr + size - (u32)dataPtr, 0x10);
+    u32 alignedSize = static_cast<u32>(alignDown(size - expHeapSize, 0x10));
 
-    if (ptr)
-        newHeap = new (ptr) JKRExpHeap(dataPtr, alignedSize, parent2, errorFlag);
+    newHeap = new (ptr) JKRExpHeap(dataPtr, alignedSize, parent2, errorFlag);
 
     newHeap->_6E = true;
     newHeap->_70 = ptr;
@@ -90,7 +116,7 @@ JKRExpHeap::JKRExpHeap(void* p1, u32 p2, JKRHeap* p3, bool p4) : JKRHeap(p1, p2,
     mCurrentGroupID = 0xFF;
     mHead = static_cast<CMemBlock*>(p1);
     mTail = mHead;
-    mHead->initiate(nullptr, nullptr, p2 - 0x10, 0, 0);
+    mHead->initiate(nullptr, nullptr, p2 - RuntimeMemBlockSize, 0, 0);
     mHeadUsedList = nullptr;
     mTailUsedList = nullptr;
 }
@@ -109,6 +135,13 @@ s32 JKRExpHeap::do_changeGroupID(unsigned char groupID) {
 
 void* JKRExpHeap::do_alloc(u32 size, int alignment) {
     lock();
+    if (size > UINT32_MAX - 3 || alignment == INT_MIN) {
+        JUTWarningConsole_f(":::cannot alloc memory (0x%x byte).\n", size);
+        if (mErrorFlag == true)
+            callErrorHandler(this, size, alignment);
+        unlock();
+        return nullptr;
+    }
     if (size < 4) {
 
         size = 4;
@@ -151,17 +184,18 @@ void* JKRExpHeap::allocFromHead(u32 size, int align) {
     CMemBlock* newFreeBlock;
     CMemBlock* newUsedBlock;
 
-    size = ALIGN_NEXT(size, 4);
-    int foundSize = -1;
+    size = ALIGN_NEXT(size, 4u);
+    u32 foundSize = UINT32_MAX;
     u32 foundOffset = 0;
     CMemBlock* foundBlock = nullptr;
 
     for (CMemBlock* block = mHead; block; block = block->mNext) {
-        u32 offset = ALIGN_PREV(align - 1 + (u32)block->getContent(), align) - (u32)block->getContent();
-        if (block->mAllocatedSpace < size + offset) {
+        uintptr_t content = reinterpret_cast<uintptr_t>(block->getContent());
+        u32 offset = static_cast<u32>(alignUp(content, static_cast<uintptr_t>(align)) - content);
+        if (offset > block->mAllocatedSpace || size > block->mAllocatedSpace - offset) {
             continue;
         }
-        if (foundSize <= (u32)block->mAllocatedSpace) {
+        if (foundSize <= block->mAllocatedSpace) {
             continue;
         }
         foundSize = block->mAllocatedSpace;
@@ -181,11 +215,11 @@ void* JKRExpHeap::allocFromHead(u32 size, int align) {
     DBfoundBlock = foundBlock;
 
     if (foundBlock) {
-        if (foundOffset >= sizeof(CMemBlock)) {
+        if (foundOffset >= RuntimeMemBlockSize) {
             whatdo2++;
             CMemBlock* prev = foundBlock->mPrev;
             CMemBlock* next = foundBlock->mNext;
-            newUsedBlock = foundBlock->allocFore(foundOffset - sizeof(CMemBlock), 0, 0, 0, 0);
+            newUsedBlock = foundBlock->allocFore(foundOffset - RuntimeMemBlockSize, 0, 0, 0, 0);
 
             if (newUsedBlock) {
                 whatdo2 += 2;
@@ -217,7 +251,7 @@ void* JKRExpHeap::allocFromHead(u32 size, int align) {
             CMemBlock* prev = foundBlock->mPrev;
             CMemBlock* next = foundBlock->mNext;
             removeFreeBlock(foundBlock);
-            newUsedBlock = (CMemBlock*)((u32)foundBlock + foundOffset);
+            newUsedBlock = reinterpret_cast<CMemBlock*>(reinterpret_cast<u8*>(foundBlock) + foundOffset);
             newUsedBlock->mAllocatedSpace = foundBlock->mAllocatedSpace - foundOffset;
             newFreeBlock = newUsedBlock->allocFore(size, mCurrentGroupID, (u8)foundOffset, 0, 0);
             if (newFreeBlock) {
@@ -248,15 +282,15 @@ void* JKRExpHeap::allocFromHead(u32 size, int align) {
 }
 
 void* JKRExpHeap::allocFromHead(u32 size) {
-    size = ALIGN_NEXT(size, 4);
-    int foundSize = -1;
+    size = ALIGN_NEXT(size, 4u);
+    u32 foundSize = UINT32_MAX;
     CMemBlock* foundBlock = nullptr;
 
     for (CMemBlock* block = mHead; block; block = block->mNext) {
         if (block->mAllocatedSpace < size) {
             continue;
         }
-        if (foundSize <= (u32)block->mAllocatedSpace) { // TODO: figure out if mAllocatedSpace is u32 or not
+        if (foundSize <= block->mAllocatedSpace) {
 
             continue;
         }
@@ -296,11 +330,15 @@ void* JKRExpHeap::allocFromTail(u32 size, int align) {
     CMemBlock* foundBlock = nullptr;
     CMemBlock* newBlock = nullptr;
     u32 usedSize;
-    u32 start;
+    uintptr_t start;
 
     for (CMemBlock* block = mTail; block; block = block->mPrev) {
-        start = ALIGN_PREV((u32)block->getContent() + block->mAllocatedSpace - size, align);
-        usedSize = (u32)block->getContent() + block->mAllocatedSpace - start;
+        if (block->mAllocatedSpace < size) {
+            continue;
+        }
+        uintptr_t contentEnd = reinterpret_cast<uintptr_t>(block->getContent()) + block->mAllocatedSpace;
+        start = alignDown(contentEnd - size, static_cast<uintptr_t>(align));
+        usedSize = static_cast<u32>(contentEnd - start);
         if (block->mAllocatedSpace >= usedSize) {
             foundBlock = block;
             offset = block->mAllocatedSpace - usedSize;
@@ -309,20 +347,20 @@ void* JKRExpHeap::allocFromTail(u32 size, int align) {
         }
     }
     if (foundBlock != nullptr) {
-        if (offset >= sizeof(CMemBlock)) {
-            newBlock->initiate(nullptr, nullptr, usedSize, mCurrentGroupID, -0x80);
-            foundBlock->mAllocatedSpace = foundBlock->mAllocatedSpace - usedSize - sizeof(CMemBlock);
+        if (offset >= RuntimeMemBlockSize) {
+            newBlock->initiate(nullptr, nullptr, usedSize, mCurrentGroupID, 0x80);
+            foundBlock->mAllocatedSpace = foundBlock->mAllocatedSpace - usedSize - RuntimeMemBlockSize;
             appendUsedList(newBlock);
             return newBlock->getContent();
         } else {
             if (offset != 0) {
                 removeFreeBlock(foundBlock);
-                newBlock->initiate(nullptr, nullptr, usedSize, mCurrentGroupID, offset | 0x80);
+                newBlock->initiate(nullptr, nullptr, usedSize, mCurrentGroupID, static_cast<u8>(offset | 0x80));
                 appendUsedList(newBlock);
                 return newBlock->getContent();
             } else {
                 removeFreeBlock(foundBlock);
-                newBlock->initiate(nullptr, nullptr, usedSize, mCurrentGroupID, -0x80);
+                newBlock->initiate(nullptr, nullptr, usedSize, mCurrentGroupID, 0x80);
                 appendUsedList(newBlock);
                 return newBlock->getContent();
             }
@@ -332,7 +370,7 @@ void* JKRExpHeap::allocFromTail(u32 size, int align) {
 }
 
 void* JKRExpHeap::allocFromTail(u32 size) {
-    u32 size2 = ALIGN_NEXT(size, 4);
+    u32 size2 = ALIGN_NEXT(size, 4u);
     CMemBlock* foundBlock = nullptr;
     for (CMemBlock* block = mTail; block; block = block->mPrev) {
         if (block->mAllocatedSpace >= size2) {
@@ -396,7 +434,7 @@ void JKRExpHeap::do_freeAll() {
     JKRHeap::callAllDisposer();
     mHead = (CMemBlock*)mStart;
     mTail = mHead;
-    mHead->initiate(nullptr, nullptr, mSize - sizeof(CMemBlock), 0, 0);
+    mHead->initiate(nullptr, nullptr, mSize - RuntimeMemBlockSize, 0, 0);
     mHeadUsedList = nullptr;
     mTailUsedList = nullptr;
     unlock();
@@ -424,15 +462,19 @@ s32 JKRExpHeap::do_resize(void* ptr, u32 size) {
         unlock();
         return -1;
     }
-    size = ALIGN_NEXT(size, 4);
+    if (size > UINT32_MAX - 3) {
+        unlock();
+        return -1;
+    }
+    size = ALIGN_NEXT(size, 4u);
     if (size == block->mAllocatedSpace) {
         unlock();
-        return size;
+        return static_cast<s32>(size);
     }
     if (size > block->mAllocatedSpace) {
         CMemBlock* foundBlock = nullptr;
         for (CMemBlock* freeBlock = mHead; freeBlock; freeBlock = freeBlock->mNext) {
-            if (freeBlock == (CMemBlock*)((u32)(block + 1) + block->mAllocatedSpace)) {
+            if (freeBlock == reinterpret_cast<CMemBlock*>(reinterpret_cast<u8*>(block + 1) + block->mAllocatedSpace)) {
                 foundBlock = freeBlock;
                 break;
             }
@@ -441,20 +483,20 @@ s32 JKRExpHeap::do_resize(void* ptr, u32 size) {
             unlock();
             return -1;
         }
-        if (size > block->mAllocatedSpace + sizeof(CMemBlock) + foundBlock->mAllocatedSpace) {
+        if (size > block->mAllocatedSpace + RuntimeMemBlockSize + foundBlock->mAllocatedSpace) {
             unlock();
             return -1;
         }
         removeFreeBlock(foundBlock);
-        block->mAllocatedSpace += foundBlock->mAllocatedSpace + sizeof(CMemBlock);
-        if (block->mAllocatedSpace - size > sizeof(CMemBlock)) {
+        block->mAllocatedSpace += foundBlock->mAllocatedSpace + RuntimeMemBlockSize;
+        if (block->mAllocatedSpace - size > RuntimeMemBlockSize) {
             CMemBlock* newBlock = block->allocFore(size, block->mGroupID, block->mFlags, 0, 0);
             if (newBlock) {
                 recycleFreeBlock(newBlock);
             }
         }
     } else {
-        if (block->mAllocatedSpace - size > sizeof(CMemBlock)) {
+        if (block->mAllocatedSpace - size > RuntimeMemBlockSize) {
             CMemBlock* freeBlock = block->allocFore(size, block->mGroupID, block->mFlags, 0, 0);
             if (freeBlock) {
                 recycleFreeBlock(freeBlock);
@@ -462,7 +504,7 @@ s32 JKRExpHeap::do_resize(void* ptr, u32 size) {
         }
     }
     unlock();
-    return block->mAllocatedSpace;
+    return static_cast<s32>(block->mAllocatedSpace);
 }
 
 s32 JKRExpHeap::do_getSize(void* ptr) {
@@ -473,28 +515,28 @@ s32 JKRExpHeap::do_getSize(void* ptr) {
         return -1;
     }
     unlock();
-    return block->mAllocatedSpace;
+    return static_cast<s32>(block->mAllocatedSpace);
 }
 
 s32 JKRExpHeap::do_getFreeSize() {
     lock();
-    int maxFreeSize = 0;
+    u32 maxFreeSize = 0;
     for (CMemBlock* block = mHead; block != nullptr; block = block->mNext) {
         if (maxFreeSize < block->mAllocatedSpace)
             maxFreeSize = block->mAllocatedSpace;
     }
     unlock();
-    return maxFreeSize;
+    return static_cast<s32>(maxFreeSize);
 }
 
 s32 JKRExpHeap::do_getTotalFreeSize() {
-    int freeSize = 0;
+    u32 freeSize = 0;
     lock();
     for (CMemBlock* block = mHead; block != nullptr; block = block->mNext) {
         freeSize += block->mAllocatedSpace;
     }
     unlock();
-    return freeSize;
+    return static_cast<s32>(freeSize);
 }
 
 s32 JKRExpHeap::getUsedSize(u8 groupId) const {
@@ -504,22 +546,20 @@ s32 JKRExpHeap::getUsedSize(u8 groupId) const {
     for (CMemBlock* block = mHeadUsedList; block; block = block->mNext) {
         u8 blockGroupId = block->mGroupID;
         if (blockGroupId == groupId) {
-            size += block->mAllocatedSpace + sizeof(CMemBlock);
+            size += block->mAllocatedSpace + RuntimeMemBlockSize;
         }
     }
     this2->unlock();
-    return size;
+    return static_cast<s32>(size);
 }
 
 bool JKRExpHeap::isEmpty() {
-    u32 newSize;
-    JUT_ASSERT(newSize > 0);
-    return true;
+    return mHeadUsedList == nullptr;
 }
 
 bool JKRExpHeap::check() {
     lock();
-    int totalBytes = 0;
+    u32 totalBytes = 0;
     bool ok = true;
     for (CMemBlock* block = mHeadUsedList; block; block = block->mNext) {
         if (!block->isValid()) {
@@ -543,16 +583,17 @@ bool JKRExpHeap::check() {
                 JUTWarningConsole_f(":::addr %08x: bad used list(REV) (%08x)\n", block, mTailUsedList);
             }
         }
-        totalBytes += sizeof(CMemBlock) + block->mAllocatedSpace + block->getAlignment();
+        totalBytes += RuntimeMemBlockSize + block->mAllocatedSpace + block->getAlignment();
     }
     for (CMemBlock* block = mHead; block; block = block->mNext) {
-        totalBytes += block->mAllocatedSpace + sizeof(CMemBlock);
+        totalBytes += block->mAllocatedSpace + RuntimeMemBlockSize;
         if (block->mNext) {
             if (block->mNext->mPrev != block) {
                 ok = false;
                 JUTWarningConsole_f(":::addr %08x: bad previous pointer (%08x)\n", block->mNext, block->mNext->mPrev);
             }
-            if ((u32)block + block->mAllocatedSpace + sizeof(CMemBlock) > (u32)block->mNext) {
+            if (reinterpret_cast<u8*>(block + 1) + block->mAllocatedSpace >
+                reinterpret_cast<u8*>(block->mNext)) {
                 ok = false;
                 JUTWarningConsole_f(":::addr %08x: bad block size (%08x)\n", block, block->mAllocatedSpace);
             }
@@ -580,7 +621,6 @@ void JKRExpHeap::appendUsedList(JKRExpHeap::CMemBlock* blockToAppend) {
     if (!blockToAppend) {
         JPANIC(1543, ":::ERROR! appendUsedList\n");
     }
-    CMemBlock* block = mTailUsedList;
     CMemBlock* tail = mTailUsedList;
     blockToAppend->mUsageHeader = 'HM';
     if (tail) {
@@ -643,15 +683,15 @@ void JKRExpHeap::removeUsedBlock(JKRExpHeap::CMemBlock* blockToRemove) {
 
 void JKRExpHeap::recycleFreeBlock(JKRExpHeap::CMemBlock* block) {
     JKRExpHeap::CMemBlock* newBlock = block;
-    int size = block->mAllocatedSpace;
-    void* blockEnd = (u8*)block + size;
+    u32 size = block->mAllocatedSpace;
+    void* blockEnd = reinterpret_cast<u8*>(block + 1) + size;
     block->mUsageHeader = 0;
     // int offset = block->mFlags & 0x7f;
 
-    if ((u32)(block->mFlags & 0x7f) != 0) {
+    if ((block->mFlags & 0x7f) != 0) {
         newBlock = (CMemBlock*)((u8*)block - (block->mFlags & 0x7f));
         size += (block->mFlags & 0x7f);
-        blockEnd = (u8*)newBlock + size;
+        blockEnd = reinterpret_cast<u8*>(newBlock + 1) + size;
         newBlock->mGroupID = 0;
         newBlock->mFlags = 0;
         newBlock->mAllocatedSpace = size;
@@ -699,9 +739,9 @@ void JKRExpHeap::joinTwoBlocks(CMemBlock* block) {
     // u32 nextAddr;
     // CMemBlock *next;
 
-    u32 endAddr = (u32)(block + 1) + block->mAllocatedSpace;
+    uintptr_t endAddr = reinterpret_cast<uintptr_t>(block + 1) + block->mAllocatedSpace;
     CMemBlock* next = block->mNext;
-    u32 nextAddr = (u32)next - (next->mFlags & 0x7f);
+    uintptr_t nextAddr = reinterpret_cast<uintptr_t>(next) - (next->mFlags & 0x7f);
     if (endAddr > nextAddr) {
         JUTWarningConsole_f(":::Heap may be broken. (block = %x)", block);
         JREPORTF(":::block = %x\n", block);
@@ -714,7 +754,7 @@ void JKRExpHeap::joinTwoBlocks(CMemBlock* block) {
     }
     if (endAddr == nextAddr) {
         block->mAllocatedSpace =
-            next->mAllocatedSpace + sizeof(CMemBlock) + (next->mFlags & 0x7f) + block->mAllocatedSpace;
+            next->mAllocatedSpace + RuntimeMemBlockSize + (next->mFlags & 0x7f) + block->mAllocatedSpace;
         setFreeBlock(block, block->mPrev, next->mNext);
     }
 }
@@ -739,7 +779,7 @@ bool JKRExpHeap::dump() {
         JUTReportConsole_f("%s %08x: %08x  %3d %3d  (%08x %08x)\n", block->_isTempMemBlock() ? " temp" : "alloc",
                            block->getContent(), block->mAllocatedSpace, block->mGroupID, block->getAlignment(),
                            block->mPrev, block->mNext);
-        usedBytes += sizeof(CMemBlock) + block->mAllocatedSpace + block->getAlignment();
+        usedBytes += RuntimeMemBlockSize + block->mAllocatedSpace + block->getAlignment();
         usedCount++;
     }
     JUTReportConsole("(Free Blocks)\n");
@@ -788,7 +828,7 @@ bool JKRExpHeap::dump_sort() {
             const char* type = block->_isTempMemBlock() ? " temp" : "alloc";
             JUTReportConsole_f("%s %08x: %08x  %3d %3d  (%08x %08x)\n", type, content, block->mAllocatedSpace,
                                block->mGroupID, offset, block->mPrev, block->mNext);
-            usedBytes += sizeof(CMemBlock) + block->mAllocatedSpace + block->getAlignment();
+            usedBytes += RuntimeMemBlockSize + block->mAllocatedSpace + block->getAlignment();
             usedCount++;
             var1 = block;
         }
@@ -836,28 +876,27 @@ JKRExpHeap::CMemBlock* JKRExpHeap::CMemBlock::allocFore(u32 size, u8 groupId1, u
     CMemBlock* block = nullptr;
     mGroupID = groupId1;
     mFlags = alignment1;
-    if (mAllocatedSpace >= size + sizeof(CMemBlock)) {
-        block = (CMemBlock*)(size + (u32)this);
-        block = block + 1;
+    if (size <= mAllocatedSpace && RuntimeMemBlockSize <= mAllocatedSpace - size) {
+        block = reinterpret_cast<CMemBlock*>(reinterpret_cast<u8*>(this + 1) + size);
         block->mGroupID = groupId2;
         block->mFlags = alignment2;
-        block->mAllocatedSpace = mAllocatedSpace - (size + sizeof(CMemBlock));
+        block->mAllocatedSpace = mAllocatedSpace - (size + RuntimeMemBlockSize);
         mAllocatedSpace = size;
     }
     return block;
 }
 
-JKRExpHeap::CMemBlock* JKRExpHeap::CMemBlock::allocBack(unsigned long size, unsigned char groupID, unsigned char p3,
+JKRExpHeap::CMemBlock* JKRExpHeap::CMemBlock::allocBack(u32 size, unsigned char groupID, unsigned char p3,
                                                         unsigned char allocGroupID, unsigned char p5) {
     CMemBlock* newBlock = nullptr;
-    if (mAllocatedSpace >= size + sizeof(CMemBlock)) {
+    if (size <= mAllocatedSpace && RuntimeMemBlockSize <= mAllocatedSpace - size) {
         newBlock = reinterpret_cast<CMemBlock*>(mAllocatedSpace + reinterpret_cast<u8*>(this) - size);
         newBlock->mGroupID = allocGroupID;
         newBlock->mFlags = p5 | 0x80;
         newBlock->mAllocatedSpace = size;
         mGroupID = groupID;
         mFlags = p3;
-        mAllocatedSpace -= (size + sizeof(CMemBlock));
+        mAllocatedSpace -= (size + RuntimeMemBlockSize);
     } else {
         mGroupID = allocGroupID;
         mFlags = 0x80;
@@ -884,19 +923,19 @@ void JKRExpHeap::state_register(JKRHeap::TState* p, u32 param_1) const {
     getState_(p); // not needed, however TP debug has it
     setState_u32ID_(p, param_1);
     if (param_1 <= 0xff) {
-        setState_uUsedSize_(p, getUsedSize(param_1));
+        setState_uUsedSize_(p, static_cast<u32>(getUsedSize(static_cast<u8>(param_1))));
     } else {
-        setState_uUsedSize_(p, getUsedSize_((JKRExpHeap*)this));
+        setState_uUsedSize_(p, static_cast<u32>(getUsedSize_((JKRExpHeap*)this)));
     }
     u32 checkCode = 0;
     for (CMemBlock* block = mHeadUsedList; block; block = block->mNext) {
         if (param_1 <= 0xff) {
             u8 groupId = block->mGroupID;
             if (groupId == param_1) {
-                checkCode += (u32)block * 3;
+                checkCode += pointerCheckCode(block);
             }
         } else {
-            checkCode += (u32)block * 3;
+            checkCode += pointerCheckCode(block);
         }
     }
     setState_u32CheckCode_(p, checkCode);

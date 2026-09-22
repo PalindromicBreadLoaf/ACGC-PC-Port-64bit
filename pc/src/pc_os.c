@@ -234,18 +234,18 @@ void LCDisable(void) {}
 /* --- Init --- */
 void OSInit(void) {
     if (!arena_memory) {
-        arena_memory = (u8*)malloc(PC_MAIN_MEMORY_SIZE);
+        arena_memory = (u8*)malloc(PC_RUNTIME_MEMORY_SIZE);
         if (!arena_memory) {
             fprintf(stderr, "Failed to allocate main memory arena\n");
             exit(1);
         }
-        memset(arena_memory, 0, PC_MAIN_MEMORY_SIZE);
+        memset(arena_memory, 0, PC_RUNTIME_MEMORY_SIZE);
 
         /* GC system info at phys addr 0; offset 0x28 = mem size for JKRHeap */
         *(u32*)(arena_memory + 0x28) = PC_MAIN_MEMORY_SIZE;
 
         arena_lo = arena_memory + 0x3100;
-        arena_hi = arena_memory + PC_MAIN_MEMORY_SIZE;
+        arena_hi = arena_memory + PC_RUNTIME_MEMORY_SIZE;
     }
     time_base_start = SDL_GetPerformanceCounter();
     /* compute ticks from GC epoch (Jan 1, 2000) to now, with timezone */
@@ -437,9 +437,9 @@ BOOL OSJamMessage(void* queue, void* msg, int flags) {
 volatile int __OSCurrHeap = -1;
 
 void* OSInitAlloc(void* arenaStart, void* arenaEnd, int maxHeaps) {
-    /* skip past heap descriptors */
-    uintptr_t arraySize = (uintptr_t)maxHeaps * 24;
-    uintptr_t newStart = ((uintptr_t)arenaStart + arraySize + 0x1F) & ~(uintptr_t)0x1F;
+    (void)arenaEnd;
+    (void)maxHeaps;
+    uintptr_t newStart = ((uintptr_t)arenaStart + 0x1F) & ~(uintptr_t)0x1F;
     return (void*)newStart;
 }
 

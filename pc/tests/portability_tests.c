@@ -7,6 +7,7 @@
 #include "PR/gbi.h"
 #include "PR/ultratypes.h"
 #include "TwoHeadArena.h"
+#include "gamealloc.h"
 #include "dolphin/card.h"
 #include "dolphin/gx/GXStruct.h"
 #include "dolphin/mtx.h"
@@ -142,10 +143,58 @@ static int test_two_head_arena(void) {
     return 0;
 }
 
+static int test_gamealloc(void) {
+    GameAlloc gamealloc;
+    void* first;
+    void* second;
+    void* third;
+
+    gamealloc_init(&gamealloc);
+    CHECK(gamealloc.tail == &gamealloc.head);
+    CHECK(gamealloc.head.next == &gamealloc.head);
+    CHECK(gamealloc.head.prev == &gamealloc.head);
+
+    first = gamealloc_malloc(&gamealloc, 1u);
+    second = gamealloc_malloc(&gamealloc, 32u);
+    third = gamealloc_malloc(&gamealloc, 7u);
+    CHECK(first != NULL);
+    CHECK(second != NULL);
+    CHECK(third != NULL);
+    CHECK(((uintptr_t)first % _Alignof(max_align_t)) == 0u);
+    CHECK((((GameAllocList*)first) - 1)->alloc_size == 1u);
+    CHECK((((GameAllocList*)second) - 1)->alloc_size == 32u);
+    CHECK(gamealloc.tail == ((GameAllocList*)third) - 1);
+
+    gamealloc_free(&gamealloc, second);
+    CHECK((((GameAllocList*)first) - 1)->next == ((GameAllocList*)third) - 1);
+    CHECK((((GameAllocList*)third) - 1)->prev == ((GameAllocList*)first) - 1);
+    gamealloc_free(&gamealloc, third);
+    CHECK(gamealloc.tail == ((GameAllocList*)first) - 1);
+    gamealloc_free(&gamealloc, first);
+    CHECK(gamealloc.tail == &gamealloc.head);
+    CHECK(gamealloc.head.next == &gamealloc.head);
+
+    CHECK(gamealloc_malloc(&gamealloc, SIZE_MAX) == NULL);
+    CHECK(gamealloc_malloc(&gamealloc, SIZE_MAX - sizeof(GameAllocList) + 1u) == NULL);
+#if SIZE_MAX > UINT32_MAX
+    CHECK(gamealloc_malloc(&gamealloc, (size_t)UINT32_MAX + 1u) == NULL);
+#endif
+
+    first = gamealloc_malloc(&gamealloc, 8u);
+    second = gamealloc_malloc(&gamealloc, 16u);
+    CHECK(first != NULL && second != NULL);
+    gamealloc_cleanup(&gamealloc);
+    CHECK(gamealloc.tail == &gamealloc.head);
+    CHECK(gamealloc.head.next == &gamealloc.head);
+    CHECK(gamealloc.head.prev == &gamealloc.head);
+    return 0;
+}
+
 int main(void) {
     CHECK(test_big_endian_loads() == 0);
     CHECK(test_big_endian_stores() == 0);
     CHECK(test_checked_narrowing() == 0);
     CHECK(test_two_head_arena() == 0);
+    CHECK(test_gamealloc() == 0);
     return 0;
 }

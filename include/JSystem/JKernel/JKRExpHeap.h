@@ -43,13 +43,13 @@ class JKRExpHeap : public JKRHeap {
             return mGroupID;
         }
         static CMemBlock* getBlock(void* data) {
-            return (CMemBlock*)((u32)data + -0x10);
+            return static_cast<CMemBlock*>(data) - 1;
         }
 
         u16 mUsageHeader;    // _00
         u8 mFlags;           // _02, a|bbbbbbb = a=temp, b=aln
         u8 mGroupID;         // _03
-        int mAllocatedSpace; // _04
+        u32 mAllocatedSpace; // _04
         CMemBlock* mPrev;    // _08
         CMemBlock* mNext;    // _0C
     };
@@ -87,6 +87,7 @@ class JKRExpHeap : public JKRHeap {
     static JKRExpHeap* create(u32, JKRHeap*, bool);
     static JKRExpHeap* create(void*, u32, JKRHeap*, bool);
     static JKRExpHeap* createRoot(int, bool);
+    static u32 getRuntimeOverhead();
     int freeGroup(u8 groupID);
     void joinTwoBlocks(CMemBlock*);
     void recycleFreeBlock(CMemBlock*);
@@ -107,7 +108,7 @@ class JKRExpHeap : public JKRHeap {
 
     static s32 getUsedSize_(JKRExpHeap* expHeap) {
         // s32 totalFreeSize = expHeap->getTotalFreeSize();
-        return expHeap->mSize - expHeap->getTotalFreeSize();
+        return static_cast<s32>(expHeap->mSize - static_cast<u32>(expHeap->getTotalFreeSize()));
     }
     static u32 getState_(TState* state) {
         return getState_buf_(state);

@@ -30,6 +30,7 @@
 #define PC_WINDOW_TITLE   "Animal Crossing"
 
 #define PC_MAIN_MEMORY_SIZE   (24 * 1024 * 1024)
+#define PC_RUNTIME_MEMORY_SIZE (32 * 1024 * 1024)
 #define PC_ARAM_SIZE          (16 * 1024 * 1024)
 #define PC_FIFO_SIZE          (256 * 1024)
 

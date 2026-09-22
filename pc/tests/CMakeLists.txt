@@ -1,6 +1,7 @@
 add_executable(pc_portability_tests
     portability_tests.c
     ../../src/TwoHeadArena.c
+    ../../src/gamealloc.c
 )
 
 target_include_directories(pc_portability_tests PRIVATE
@@ -38,6 +39,69 @@ target_compile_options(pc_portability_cpp_tests PRIVATE
 )
 
 add_test(NAME pc_portability_cpp COMMAND pc_portability_cpp_tests)
+
+add_executable(pc_allocator_cpp_tests
+    allocator_cpp_tests.cpp
+    allocator_test_stubs.cpp
+    ../../src/static/JSystem/JKernel/JKRHeap.cpp
+    ../../src/static/JSystem/JKernel/JKRExpHeap.cpp
+    ../../src/static/JSystem/JKernel/JKRDisposer.cpp
+    ../../src/static/JSystem/JSupport/JSUList.cpp
+)
+
+target_include_directories(pc_allocator_cpp_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+)
+
+target_compile_definitions(pc_allocator_cpp_tests PRIVATE TARGET_PC _LANGUAGE_C_PLUS_PLUS PC_GBI_LAYOUT_TEST)
+target_compile_options(pc_allocator_cpp_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wconversion
+    -Wno-comment
+    -Wno-multichar
+    -Wno-unknown-pragmas
+    -Wno-unused-function
+    -Wno-unused-parameter
+    -ffunction-sections
+    -fdata-sections
+)
+target_link_options(pc_allocator_cpp_tests PRIVATE -Wl,--gc-sections)
+
+add_test(NAME pc_allocator_cpp COMMAND pc_allocator_cpp_tests)
+
+add_executable(pc_libc64_allocator_tests
+    libc64_allocator_tests.c
+    libc64_allocator_test_stubs.c
+    ../../src/static/libc64/__osMalloc.c
+)
+
+target_include_directories(pc_libc64_allocator_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+)
+
+target_compile_definitions(pc_libc64_allocator_tests PRIVATE
+    TARGET_PC
+    _LANGUAGE_C
+    F3DEX_GBI_2
+    PC_GBI_LAYOUT_TEST
+)
+target_compile_options(pc_libc64_allocator_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wconversion
+    -Wno-comment
+    -Wno-multichar
+    -Wno-unknown-pragmas
+    -Wno-unused-function
+    -Wno-unused-parameter
+    -Werror=pointer-to-int-cast
+    -Werror=int-to-pointer-cast
+)
+
+add_test(NAME pc_libc64_allocator COMMAND pc_libc64_allocator_tests)
 
 add_executable(pc_serialized_layout_tests
     serialized_layout_tests.c
