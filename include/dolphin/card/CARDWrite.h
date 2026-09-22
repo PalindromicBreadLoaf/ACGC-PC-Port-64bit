@@ -1,7 +1,7 @@
 #ifndef _DOLPHIN_CARDWRITE_H_
 #define _DOLPHIN_CARDWRITE_H_
 
-long CARDWriteAsync(struct CARDFileInfo * fileInfo, const void * buf, long length, long offset, void (* callback)(long, long));
-long CARDWrite(struct CARDFileInfo * fileInfo, const void * buf, long length, long offset);
+s32 CARDWriteAsync(CARDFileInfo *fileInfo, const void *buf, s32 length, s32 offset, CARDCallback callback);
+s32 CARDWrite(CARDFileInfo *fileInfo, const void *buf, s32 length, s32 offset);
 
 #endif // _DOLPHIN_CARDWRITE_H_

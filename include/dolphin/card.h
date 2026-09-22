@@ -5,6 +5,7 @@
 #include <dolphin/dsp.h>
 #include <dolphin/dvd.h>
 #include <dolphin/os/OSAlarm.h>
+#include <dolphin/os/OSThread.h>
 
 #ifdef __cplusplus
 extern "C" {

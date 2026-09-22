@@ -4,7 +4,11 @@
 #include <string.h>
 
 #include "types.h"
+#include "PR/gbi.h"
 #include "PR/ultratypes.h"
+#include "dolphin/card.h"
+#include "dolphin/gx/GXStruct.h"
+#include "dolphin/mtx.h"
 #include "pc_portability.h"
 
 #define CHECK(condition)                                                                                               \
@@ -30,6 +34,18 @@ _Static_assert(sizeof(n64_segaddr_t) == 4, "segmented addresses must remain 32-b
 _Static_assert(sizeof(aram_addr_t) == 4, "ARAM addresses must remain 32-bit");
 _Static_assert(sizeof(dvd_offset_t) == 4, "DVD offsets must remain 32-bit");
 _Static_assert(sizeof(pc_gbi_handle_t) == 4, "GBI handles must remain 32-bit");
+_Static_assert(sizeof(Gfx) == 8, "Gfx layout changed");
+_Static_assert(sizeof(Vtx) == 16, "Vtx layout changed");
+_Static_assert(sizeof(Mtx) == 64, "N64 matrix layout changed");
+_Static_assert(sizeof(Mtx34) == 48, "Dolphin 3x4 matrix layout changed");
+_Static_assert(sizeof(Mtx44) == 64, "Dolphin 4x4 matrix layout changed");
+_Static_assert(sizeof(GXColor) == 4, "GXColor layout changed");
+_Static_assert(sizeof(GXColorS10) == 8, "GXColorS10 layout changed");
+_Static_assert(sizeof(CARDFileInfo) == 20, "CARDFileInfo layout changed");
+_Static_assert(sizeof(CARDDir) == 64, "CARDDir layout changed");
+_Static_assert(sizeof(CARDDirCheck) == 64, "CARDDirCheck layout changed");
+_Static_assert(sizeof(CARDID) == 512, "CARDID layout changed");
+_Static_assert(sizeof(CARDStat) == 108, "CARDStat layout changed");
 
 static int test_big_endian_loads(void) {
     const uint8_t bytes[] = {0x00, 0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0};

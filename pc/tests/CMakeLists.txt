@@ -5,7 +5,7 @@ target_include_directories(pc_portability_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/../include
 )
 
-target_compile_definitions(pc_portability_tests PRIVATE TARGET_PC _LANGUAGE_C)
+target_compile_definitions(pc_portability_tests PRIVATE TARGET_PC _LANGUAGE_C F3DEX_GBI_2 PC_GBI_LAYOUT_TEST)
 target_compile_options(pc_portability_tests PRIVATE
     -Wall
     -Wextra
