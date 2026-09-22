@@ -1,0 +1,26 @@
+name: LP64 portability
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  linux-x86_64:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: pc
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake --preset linux-x86_64-portability
+      - name: Build
+        run: cmake --build --preset linux-x86_64-portability
+      - name: Test
+        run: ctest --preset linux-x86_64-portability
+      - name: Configure sanitizers
+        run: cmake --preset linux-x86_64-portability-sanitize
+      - name: Build sanitizers
+        run: cmake --build --preset linux-x86_64-portability-sanitize
+      - name: Test sanitizers
+        run: ctest --preset linux-x86_64-portability-sanitize

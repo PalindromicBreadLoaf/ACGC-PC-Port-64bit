@@ -34,6 +34,9 @@
  */
 #if defined(_LANGUAGE_C) || defined(_LANGUAGE_C_PLUS_PLUS) || defined(TARGET_PC)
 
+#ifdef TARGET_PC
+#include "pc_types.h"
+#else
 typedef unsigned char       u8;     /* unsigned  8-bit */
 typedef unsigned short      u16;    /* unsigned 16-bit */
 typedef unsigned long       u32;    /* unsigned 32-bit */
@@ -43,16 +46,27 @@ typedef signed char         s8;     /* signed  8-bit */
 typedef short               s16;    /* signed 16-bit */
 typedef long                s32;    /* signed 32-bit */
 typedef long long           s64;    /* signed 64-bit */
+#endif
 
 typedef volatile unsigned char      vu8;    /* unsigned  8-bit */
 typedef volatile unsigned short     vu16;   /* unsigned 16-bit */
+#ifdef TARGET_PC
+typedef volatile uint32_t           vu32;   /* unsigned 32-bit */
+typedef volatile uint64_t           vu64;   /* unsigned 64-bit */
+#else
 typedef volatile unsigned long      vu32;   /* unsigned 32-bit */
 typedef volatile unsigned long long vu64;   /* unsigned 64-bit */
+#endif
 
 typedef volatile signed char        vs8;    /* signed  8-bit */
 typedef volatile short              vs16;   /* signed 16-bit */
+#ifdef TARGET_PC
+typedef volatile int32_t            vs32;   /* signed 32-bit */
+typedef volatile int64_t            vs64;   /* signed 64-bit */
+#else
 typedef volatile long               vs32;   /* signed 32-bit */
 typedef volatile long long          vs64;   /* signed 64-bit */
+#endif
 
 typedef float   f32;    /* single prec floating point */
 typedef double  f64;    /* double prec floating point */

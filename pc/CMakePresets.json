@@ -1,0 +1,58 @@
+{
+  "version": 2,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 20,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "linux-x86_64-portability",
+      "displayName": "Linux x86-64 portability checks",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/linux-x86_64-portability",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "PC_BUILD_GAME": "OFF",
+        "PC_BUILD_PORTABILITY_TESTS": "ON"
+      }
+    },
+    {
+      "name": "linux-x86_64-portability-sanitize",
+      "displayName": "Linux x86-64 portability checks with ASan and UBSan",
+      "inherits": "linux-x86_64-portability",
+      "binaryDir": "${sourceDir}/build/linux-x86_64-portability-sanitize",
+      "cacheVariables": {
+        "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+        "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "linux-x86_64-portability",
+      "configurePreset": "linux-x86_64-portability"
+    },
+    {
+      "name": "linux-x86_64-portability-sanitize",
+      "configurePreset": "linux-x86_64-portability-sanitize"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "linux-x86_64-portability",
+      "configurePreset": "linux-x86_64-portability",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "linux-x86_64-portability-sanitize",
+      "configurePreset": "linux-x86_64-portability-sanitize",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ]
+}

@@ -34,6 +34,7 @@
 #define FRAMERATE_SELECT(f60, f50) (f60)
 #endif
 
+#ifndef TARGET_PC
 typedef signed char s8;
 typedef signed short s16;
 typedef signed long s32;
@@ -41,7 +42,6 @@ typedef signed long long s64;
 typedef unsigned char u8;
 typedef unsigned short u16;
 typedef unsigned long u32;
-#ifndef TARGET_PC
 #ifndef _SIZE_T_DEF
 #define _SIZE_T_DEF
 typedef unsigned long size_t;
@@ -49,7 +49,9 @@ typedef unsigned long size_t;
 #else
 #include <stddef.h>
 #endif
+#ifndef TARGET_PC
 typedef unsigned long long u64;
+#endif
 typedef unsigned int uint;
 
 typedef volatile u8 vu8;

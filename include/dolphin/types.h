@@ -1,6 +1,9 @@
 #ifndef _DOLPHIN_TYPES_H_
 #define _DOLPHIN_TYPES_H_
 
+#ifdef TARGET_PC
+#include "pc_types.h"
+#else
 typedef signed   char          s8;
 typedef unsigned char          u8;
 typedef signed   short int     s16;
@@ -9,6 +12,7 @@ typedef signed   long          s32;
 typedef unsigned long          u32;
 typedef signed   long long int s64;
 typedef unsigned long long int u64;
+#endif
 
 typedef float  f32;
 typedef double f64;
@@ -49,8 +53,12 @@ typedef int BOOL;
 #endif
 #endif
 
+#ifndef INT_MIN
 #define INT_MIN -2147483648
+#endif
+#ifndef INT_MAX
 #define INT_MAX 2147483647
+#endif
 
 #ifndef NULL
 #ifndef __cplusplus

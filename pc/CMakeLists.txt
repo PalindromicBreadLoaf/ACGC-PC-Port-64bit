@@ -3,6 +3,19 @@ project(ac_pc C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+option(PC_BUILD_GAME "Build Animal Crossing" ON)
+option(PC_BUILD_PORTABILITY_TESTS "Build ROM-less portability tests" OFF)
+
+if(PC_BUILD_PORTABILITY_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
+
+if(NOT PC_BUILD_GAME)
+    return()
+endif()
 
 # Do NOT set a default build type. Optimization is controlled by the common
 # flags below: -O2 with -fno-strict-aliasing and -fwrapv, which neutralize the
