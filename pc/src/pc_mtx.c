@@ -14,7 +14,7 @@ typedef union {
     long long int forc_align;
 } Mtx;
 
-#define FTOFIX32(x) (long)((x) * (float)0x00010000)
+#define FTOFIX32(x) (s32)((x) * (float)0x00010000)
 
 /* --- Dolphin PS* matrix functions (3x4 row-major) --- */
 

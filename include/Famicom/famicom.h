@@ -116,6 +116,10 @@ typedef struct MemcardGameHeader_t {
     u16 icon_format;
     u16 icon_flags;
     u16 comment_img_size; /* Size of comment + banner + icon */
+#ifdef TARGET_PC
+    u8 flags0;
+    u8 flags1;
+#else
     struct {
         u8 has_comment_img : 1;
         u8 comment_type : 2;
@@ -128,8 +132,141 @@ typedef struct MemcardGameHeader_t {
         u8 banner_fmt : 2;
         u8 reserved : 5;
     } flags1;
+#endif
     u16 pad;
 } MemcardGameHeader_t;
+
+#define MEMCARD_GAME_FLAGS0_HAS_COMMENT_IMG 0x80
+#define MEMCARD_GAME_FLAGS0_COMMENT_TYPE_MASK 0x60
+#define MEMCARD_GAME_FLAGS0_COMMENT_TYPE_SHIFT 5
+#define MEMCARD_GAME_FLAGS0_BANNER_TYPE_MASK 0x18
+#define MEMCARD_GAME_FLAGS0_BANNER_TYPE_SHIFT 3
+#define MEMCARD_GAME_FLAGS0_ICON_TYPE_MASK 0x06
+#define MEMCARD_GAME_FLAGS0_ICON_TYPE_SHIFT 1
+#define MEMCARD_GAME_FLAGS0_NO_COPY_FLAG 0x01
+#define MEMCARD_GAME_FLAGS1_NO_MOVE_FLAG 0x80
+#define MEMCARD_GAME_FLAGS1_BANNER_FMT_MASK 0x60
+#define MEMCARD_GAME_FLAGS1_BANNER_FMT_SHIFT 5
+
+static inline u8 Famicom_GetCommentType(const MemcardGameHeader_t* header) {
+#ifdef TARGET_PC
+    return (u8)((header->flags0 & MEMCARD_GAME_FLAGS0_COMMENT_TYPE_MASK) >>
+                MEMCARD_GAME_FLAGS0_COMMENT_TYPE_SHIFT);
+#else
+    return header->flags0.comment_type;
+#endif
+}
+
+static inline u8 Famicom_GetBannerType(const MemcardGameHeader_t* header) {
+#ifdef TARGET_PC
+    return (u8)((header->flags0 & MEMCARD_GAME_FLAGS0_BANNER_TYPE_MASK) >> MEMCARD_GAME_FLAGS0_BANNER_TYPE_SHIFT);
+#else
+    return header->flags0.banner_type;
+#endif
+}
+
+static inline u8 Famicom_GetIconType(const MemcardGameHeader_t* header) {
+#ifdef TARGET_PC
+    return (u8)((header->flags0 & MEMCARD_GAME_FLAGS0_ICON_TYPE_MASK) >> MEMCARD_GAME_FLAGS0_ICON_TYPE_SHIFT);
+#else
+    return header->flags0.icon_type;
+#endif
+}
+
+static inline u8 Famicom_GetBannerFormat(const MemcardGameHeader_t* header) {
+#ifdef TARGET_PC
+    return (u8)((header->flags1 & MEMCARD_GAME_FLAGS1_BANNER_FMT_MASK) >> MEMCARD_GAME_FLAGS1_BANNER_FMT_SHIFT);
+#else
+    return header->flags1.banner_fmt;
+#endif
+}
+
+static inline void Famicom_SetCommentType(MemcardGameHeader_t* header, u32 value) {
+#ifdef TARGET_PC
+    header->flags0 = (header->flags0 & (u8)~MEMCARD_GAME_FLAGS0_COMMENT_TYPE_MASK) |
+                     (u8)((value << MEMCARD_GAME_FLAGS0_COMMENT_TYPE_SHIFT) & MEMCARD_GAME_FLAGS0_COMMENT_TYPE_MASK);
+#else
+    header->flags0.comment_type = value;
+#endif
+}
+
+static inline void Famicom_SetBannerType(MemcardGameHeader_t* header, u32 value) {
+#ifdef TARGET_PC
+    header->flags0 = (header->flags0 & (u8)~MEMCARD_GAME_FLAGS0_BANNER_TYPE_MASK) |
+                     (u8)((value << MEMCARD_GAME_FLAGS0_BANNER_TYPE_SHIFT) & MEMCARD_GAME_FLAGS0_BANNER_TYPE_MASK);
+#else
+    header->flags0.banner_type = value;
+#endif
+}
+
+static inline void Famicom_SetIconType(MemcardGameHeader_t* header, u32 value) {
+#ifdef TARGET_PC
+    header->flags0 = (header->flags0 & (u8)~MEMCARD_GAME_FLAGS0_ICON_TYPE_MASK) |
+                     (u8)((value << MEMCARD_GAME_FLAGS0_ICON_TYPE_SHIFT) & MEMCARD_GAME_FLAGS0_ICON_TYPE_MASK);
+#else
+    header->flags0.icon_type = value;
+#endif
+}
+
+static inline void Famicom_SetBannerFormat(MemcardGameHeader_t* header, u32 value) {
+#ifdef TARGET_PC
+    header->flags1 = (header->flags1 & (u8)~MEMCARD_GAME_FLAGS1_BANNER_FMT_MASK) |
+                     (u8)((value << MEMCARD_GAME_FLAGS1_BANNER_FMT_SHIFT) & MEMCARD_GAME_FLAGS1_BANNER_FMT_MASK);
+#else
+    header->flags1.banner_fmt = value;
+#endif
+}
+
+static inline BOOL Famicom_HasCommentImage(const MemcardGameHeader_t* header) {
+#ifdef TARGET_PC
+    return (header->flags0 & MEMCARD_GAME_FLAGS0_HAS_COMMENT_IMG) != 0;
+#else
+    return header->flags0.has_comment_img;
+#endif
+}
+
+static inline BOOL Famicom_IsCopyDisabled(const MemcardGameHeader_t* header) {
+#ifdef TARGET_PC
+    return (header->flags0 & MEMCARD_GAME_FLAGS0_NO_COPY_FLAG) != 0;
+#else
+    return header->flags0.no_copy_flag;
+#endif
+}
+
+static inline BOOL Famicom_IsMoveDisabled(const MemcardGameHeader_t* header) {
+#ifdef TARGET_PC
+    return (header->flags1 & MEMCARD_GAME_FLAGS1_NO_MOVE_FLAG) != 0;
+#else
+    return header->flags1.no_move_flag;
+#endif
+}
+
+static inline void Famicom_SetHasCommentImage(MemcardGameHeader_t* header, BOOL enabled) {
+#ifdef TARGET_PC
+    header->flags0 = enabled ? (u8)(header->flags0 | MEMCARD_GAME_FLAGS0_HAS_COMMENT_IMG)
+                             : (u8)(header->flags0 & (u8)~MEMCARD_GAME_FLAGS0_HAS_COMMENT_IMG);
+#else
+    header->flags0.has_comment_img = enabled;
+#endif
+}
+
+static inline void Famicom_SetCopyDisabled(MemcardGameHeader_t* header, BOOL enabled) {
+#ifdef TARGET_PC
+    header->flags0 = enabled ? (u8)(header->flags0 | MEMCARD_GAME_FLAGS0_NO_COPY_FLAG)
+                             : (u8)(header->flags0 & (u8)~MEMCARD_GAME_FLAGS0_NO_COPY_FLAG);
+#else
+    header->flags0.no_copy_flag = enabled;
+#endif
+}
+
+static inline void Famicom_SetMoveDisabled(MemcardGameHeader_t* header, BOOL enabled) {
+#ifdef TARGET_PC
+    header->flags1 = enabled ? (u8)(header->flags1 | MEMCARD_GAME_FLAGS1_NO_MOVE_FLAG)
+                             : (u8)(header->flags1 & (u8)~MEMCARD_GAME_FLAGS1_NO_MOVE_FLAG);
+#else
+    header->flags1.no_move_flag = enabled;
+#endif
+}
 
 typedef int (*FAMICOM_GETSAVECHAN_PROC)(int* player_no, s32* slot_card_result);
 

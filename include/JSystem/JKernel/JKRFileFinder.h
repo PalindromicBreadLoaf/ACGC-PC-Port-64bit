@@ -38,7 +38,7 @@ class JKRFileFinder {
 
 class JKRArcFinder : public JKRFileFinder {
   public:
-    JKRArcFinder(JKRArchive*, long, long);
+    JKRArcFinder(JKRArchive*, s32, s32);
 
     virtual ~JKRArcFinder() {
     }                            // _08 (weak)
@@ -47,9 +47,9 @@ class JKRArcFinder : public JKRFileFinder {
     // _00     = VTBL
     // _00-_14 = JKRFileFinder
     JKRArchive* mArchive; // _14
-    long mStartIndex;     // _18
-    long mEndIndex;       // _1C
-    long mNextIndex;      // _20
+    s32 mStartIndex;      // _18
+    s32 mEndIndex;        // _1C
+    s32 mNextIndex;       // _20
 };
 
 class JKRDvdFinder : public JKRFileFinder {

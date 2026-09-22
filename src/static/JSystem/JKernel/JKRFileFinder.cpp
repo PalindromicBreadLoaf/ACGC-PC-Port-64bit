@@ -2,7 +2,7 @@
 #include "JSystem/JKernel/JKRFileFinder.h"
 #include "JSystem/JKernel/JKRArchive.h"
 
-JKRArcFinder::JKRArcFinder(JKRArchive* archive, long startindex, long entries) : JKRFileFinder() {
+JKRArcFinder::JKRArcFinder(JKRArchive* archive, s32 startindex, s32 entries) : JKRFileFinder() {
     mArchive = archive;
 
     mIsAvailable = entries > 0;

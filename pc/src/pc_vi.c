@@ -20,8 +20,8 @@ static void (*vi_post_callback)(u32) = NULL;
 
 void VIInit(void) {
     if (g_frame_limiter > 0) {
-        printf("[VI] frame limit=%luus (%lu Hz)\n",
-               (u32)((1.0 / (double)g_frame_limiter) * 1000000), (unsigned long)g_frame_limiter);
+        printf("[VI] frame limit=%uus (%u Hz)\n",
+               (u32)((1.0 / (double)g_frame_limiter) * 1000000), g_frame_limiter);
     } else {
         printf("[VI] frame limit=disabled\n");
     }
@@ -110,8 +110,8 @@ void VIWaitForRetrace(void) {
         double pace_ms = (double)(t_after_pace - t_before_pace) * 1000.0 / (double)perf_freq;
         double work_ms = (double)(vi_enter - frame_start_time) * 1000.0 / (double)perf_freq;
         int audio_fill = pc_audio_get_buffer_fill();
-        printf("[STUTTER] frame %lu: total=%.1fms work=%.1fms swap=%.1fms pace=%.1fms audio_fill=%d\n",
-               (unsigned long)pc_frame_counter, frame_ms, work_ms - swap_ms - pace_ms, swap_ms, pace_ms, audio_fill);
+        printf("[STUTTER] frame %u: total=%.1fms work=%.1fms swap=%.1fms pace=%.1fms audio_fill=%d\n",
+               pc_frame_counter, frame_ms, work_ms - swap_ms - pace_ms, swap_ms, pace_ms, audio_fill);
     }
 
     pc_profiler_end_frame(profile_frame_ms, pc_audio_get_buffer_fill());

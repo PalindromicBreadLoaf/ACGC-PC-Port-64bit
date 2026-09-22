@@ -115,7 +115,7 @@ JKRFileFinder* JKRFileLoader::findFirstFile(const char* volumeName) {
     return ret;
 }
 
-const char* JKRFileLoader::fetchVolumeName(char* buffer, long bufferSize, const char* path) {
+const char* JKRFileLoader::fetchVolumeName(char* buffer, size_t bufferSize, const char* path) {
     static char rootPath[] = "/";
     if (strcmp(path, "/") == 0) {
         strcpy(buffer, rootPath);

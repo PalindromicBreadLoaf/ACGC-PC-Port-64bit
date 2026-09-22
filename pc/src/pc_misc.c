@@ -149,8 +149,8 @@ BOOL OSUnlink(void* info) { (void)info; return TRUE; }
 
 /* bzero/bcopy: Windows CRT doesn't have these, Linux glibc does */
 #ifdef _WIN32
-void bzero(void* s, unsigned int n) { memset(s, 0, n); }
-void bcopy(const void* src, void* dst, unsigned int n) { memmove(dst, src, n); }
+void bzero(void* s, size_t n) { memset(s, 0, n); }
+void bcopy(const void* src, void* dst, size_t n) { memmove(dst, src, n); }
 #endif
 
 u8 GXNtsc480IntDf[64] = {0};

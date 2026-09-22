@@ -24,7 +24,7 @@ u32 ARGetSize(void) { return PC_ARAM_SIZE; }
 u32 ARAlloc(u32 size) {
     u32 aligned_size = (size + 31) & ~31; /* 32-byte align */
     if (aram_alloc_ptr + aligned_size > PC_ARAM_SIZE) {
-        fprintf(stderr, "[PC/ARAM] Out of ARAM! Requested %lu, used %lu/%u\n",
+        fprintf(stderr, "[PC/ARAM] Out of ARAM! Requested %u, used %u/%u\n",
                 size, aram_alloc_ptr, PC_ARAM_SIZE);
         return 0;
     }

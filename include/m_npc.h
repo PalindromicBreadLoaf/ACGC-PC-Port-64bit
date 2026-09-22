@@ -183,7 +183,7 @@ typedef struct animal_memory_s {
     /* 0x030 */ s8 friendship;                 /* friendship with the player */
     /* 0x031 */ Anmlet_c letter_info;          /* saved letter flags */
     /* 0x032 */ Anmplmail_c letter;            /* saved letter */
-} Anmmem_c;
+} ATTRIBUTE_ALIGN(8) Anmmem_c;
 
 /* sizeof(anmuni) == 8 */
 typedef union {

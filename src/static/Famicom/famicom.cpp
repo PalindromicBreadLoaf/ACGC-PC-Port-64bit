@@ -685,9 +685,9 @@ static int SetupResBanner(const ResTIMG*, u8*, size_t, size_t*, u8*);
 static int SetupResIcon(const ResTIMG*, u8*, size_t, size_t*, u16*, u16*);
 
 static void SetupExternCommentImage(u8* embedded_save_comment_img, u8* dst, u8* rom_file_comment_img) {
-    u32 size;
+    size_t size;
 
-    switch (famicomCommon.memcard_game_header.flags0.comment_type) {
+    switch (Famicom_GetCommentType(&famicomCommon.memcard_game_header)) {
         case MEMCARD_COMMENT_TYPE_NONE:
             break;
         case MEMCARD_COMMENT_TYPE_COPY_ROM: {
@@ -719,7 +719,7 @@ static void SetupExternCommentImage(u8* embedded_save_comment_img, u8* dst, u8* 
     }
 
     rom_file_comment_img += CARD_COMMENT_SIZE;
-    switch (famicomCommon.memcard_game_header.flags0.banner_type) {
+    switch (Famicom_GetBannerType(&famicomCommon.memcard_game_header)) {
         case MEMCARD_BANNER_TYPE_NONE:
             break;
         case MEMCARD_BANNER_TYPE_DEFAULT: {
@@ -730,18 +730,18 @@ static void SetupExternCommentImage(u8* embedded_save_comment_img, u8* dst, u8* 
                 SetupResBanner(banner_data, dst, 0x1800, &size, &banner_fmt);
                 JKRFileLoader::removeResource(banner_data, nullptr);
                 dst += size;
-                famicomCommon.memcard_game_header.flags1.banner_fmt = banner_fmt;
+                Famicom_SetBannerFormat(&famicomCommon.memcard_game_header, banner_fmt);
             }
             break;
         }
         case MEMCARD_BANNER_TYPE_COPY_ROM: {
-            size = getBannerSizeFromFormat(famicomCommon.memcard_game_header.flags1.banner_fmt);
+            size = getBannerSizeFromFormat(Famicom_GetBannerFormat(&famicomCommon.memcard_game_header));
             memcpy(dst, rom_file_comment_img, size);
             dst += size;
             break;
         }
         case MEMCARD_BANNER_TYPE_COPY_EMBEDDED: {
-            size = getBannerSizeFromFormat(famicomCommon.memcard_game_header.flags1.banner_fmt);
+            size = getBannerSizeFromFormat(Famicom_GetBannerFormat(&famicomCommon.memcard_game_header));
             memcpy(dst, embedded_save_comment_img, size);
             dst += size;
             embedded_save_comment_img += size;
@@ -749,9 +749,9 @@ static void SetupExternCommentImage(u8* embedded_save_comment_img, u8* dst, u8* 
         }
     }
 
-    size_t banner_size = getBannerSizeFromFormat(famicomCommon.memcard_game_header.flags1.banner_fmt);
+    size_t banner_size = getBannerSizeFromFormat(Famicom_GetBannerFormat(&famicomCommon.memcard_game_header));
     rom_file_comment_img += banner_size;
-    switch (famicomCommon.memcard_game_header.flags0.icon_type) {
+    switch (Famicom_GetIconType(&famicomCommon.memcard_game_header)) {
         case MEMCARD_ICON_TYPE_NONE:
             break;
         case MEMCARD_ICON_TYPE_DEFAULT: {
@@ -787,14 +787,14 @@ static void SetupInternalCommentImage(u8* data) {
     u8* data_p = data;
 
     // Setup comment
-    famicomCommon.memcard_game_header.flags0.comment_type = MEMCARD_COMMENT_TYPE_DEFAULT;
+    Famicom_SetCommentType(&famicomCommon.memcard_game_header, MEMCARD_COMMENT_TYPE_DEFAULT);
     strncpy((char*)data, "Animal Crossing", 32);
     strncpy((char*)data + 32, "NES Save Data           ", 32);
     data += CARD_COMMENT_SIZE;
 
     // Setup banner
-    famicomCommon.memcard_game_header.flags0.banner_type = MEMCARD_BANNER_TYPE_NONE;
-    famicomCommon.memcard_game_header.flags1.banner_fmt = CARD_STAT_BANNER_NONE;
+    Famicom_SetBannerType(&famicomCommon.memcard_game_header, MEMCARD_BANNER_TYPE_NONE);
+    Famicom_SetBannerFormat(&famicomCommon.memcard_game_header, CARD_STAT_BANNER_NONE);
 
     // Setup icon
     void* icon = JKRFileLoader::getGlbResource("/FAMICOM/famikon.bti.szs");
@@ -805,18 +805,18 @@ static void SetupInternalCommentImage(u8* data) {
         
         SetupResIcon(icon_res, data, 0x800, nullptr, &icon_fmts, &icon_flags);
         JKRFileLoader::removeResource(icon_res, nullptr);
-        famicomCommon.memcard_game_header.flags0.icon_type = MEMCARD_ICON_TYPE_DEFAULT;
+        Famicom_SetIconType(&famicomCommon.memcard_game_header, MEMCARD_ICON_TYPE_DEFAULT);
         famicomCommon.memcard_game_header.icon_format = icon_fmts;
         famicomCommon.memcard_game_header.icon_flags = icon_flags;
         data += getIconSizeFromFormat(icon_fmts);
     }
     else {
-        famicomCommon.memcard_game_header.flags0.icon_type = MEMCARD_ICON_TYPE_NONE;
+        Famicom_SetIconType(&famicomCommon.memcard_game_header, MEMCARD_ICON_TYPE_NONE);
         famicomCommon.memcard_game_header.icon_format = 0;
         famicomCommon.memcard_game_header.icon_flags = 0;
     }
 
-    famicomCommon.memcard_game_header.comment_img_size = (u32)data - (u32)data_p;
+    famicomCommon.memcard_game_header.comment_img_size = (u16)(data - data_p);
 }
 
 static s32 memcard_data_save(
@@ -977,11 +977,11 @@ static s32 memcard_data_save(
         CARDGetAttributes(chan, fileInfo.fileNo, &cardAttr);
         u8 saved_attr = cardAttr;
 
-        if ((famicomCommon.memcard_game_header.flags0.no_copy_flag)) {
+        if (Famicom_IsCopyDisabled(&famicomCommon.memcard_game_header)) {
             saved_attr |= CARD_ATTR_NO_COPY;
         }
 
-        if ((famicomCommon.memcard_game_header.flags1.no_move_flag)) {
+        if (Famicom_IsMoveDisabled(&famicomCommon.memcard_game_header)) {
             saved_attr |= CARD_ATTR_NO_MOVE;
         }
 
@@ -1199,7 +1199,7 @@ static s32 memcard_data_load(
 
         // Reading successful!
         OSReport("読み込み成功！！\n");
-        FamicomSaveDataHeader* read_save_header = (FamicomSaveDataHeader*)((u32)buf + status.offsetData);
+        FamicomSaveDataHeader* read_save_header = (FamicomSaveDataHeader*)((u8*)buf + status.offsetData);
         
         if (famicom_save_data_check(read_save_header, -1, comment_img) == 0) {
             // The data is normal!
@@ -1335,9 +1335,9 @@ static s32 memcard_game_load(
     pc_nes_rom_copy_title(game_header->mori_name, names[rom_idx]);
     game_header->nesrom_size = 0;
     game_header->nestags_size = NESTAG_SIZE; /* just the END tag */
-    game_header->flags0.has_comment_img = FALSE;
-    game_header->flags0.no_copy_flag = FALSE;
-    game_header->flags1.no_move_flag = FALSE;
+    Famicom_SetHasCommentImage(game_header, FALSE);
+    Famicom_SetCopyDisabled(game_header, FALSE);
+    Famicom_SetMoveDisabled(game_header, FALSE);
 
     if (mura_save_name != nullptr) {
         memset(mura_save_name, 0, 32);
@@ -1456,7 +1456,7 @@ static s32 memcard_game_load(
                                 datap += ALIGN_NEXT(tags_size, 16);
     
                                 size_t comment_img_size;
-                                if (game_header->flags0.has_comment_img && (comment_img_size = game_header->comment_img_size, comment_img_size != 0)) {
+                                if (Famicom_HasCommentImage(game_header) && (comment_img_size = game_header->comment_img_size, comment_img_size != 0)) {
                                     if (JC_JKRDecomp_checkCompressed(datap) == JKRCOMPRESSION_NONE) {
                                         SetupExternCommentImage(datap, memcard_save_comment, data_bufp);
                                     }
@@ -2044,7 +2044,7 @@ static int SetupResBanner(const ResTIMG* img, u8* dst, size_t max_size, size_t* 
     }
 
     if (size != nullptr) {
-        *size = (u32)data_p - (u32)dst;
+        *size = (size_t)(data_p - dst);
     }
 
     if (type != nullptr) {
@@ -2104,7 +2104,7 @@ static int SetupResIcon(const ResTIMG* img, u8* dst, size_t max_size, size_t* si
     }
 
     if (size_p != nullptr) {
-        *size_p = (u32)data_p - (u32)dst;
+        *size_p = (size_t)(data_p - dst);
     }
 
     if (icon_fmt_p != nullptr) {
@@ -2275,9 +2275,9 @@ static int famicom_rom_load() {
         strncpy((char*)memcard_game_header->mori_name, (char*)nesinfo_get_moriName(), MURA_GAME_NAME_SIZE);
         memcard_game_header->nesrom_size = 0;
         memcard_game_header->nestags_size = 0;
-        memcard_game_header->flags0.has_comment_img = TRUE;
-        memcard_game_header->flags0.no_copy_flag = FALSE;
-        memcard_game_header->flags1.no_move_flag = FALSE;
+        Famicom_SetHasCommentImage(memcard_game_header, TRUE);
+        Famicom_SetCopyDisabled(memcard_game_header, FALSE);
+        Famicom_SetMoveDisabled(memcard_game_header, FALSE);
 #ifndef TARGET_PC
         SetupInternalCommentImage(famicomCommon.memcard_save_comment);
 #endif
@@ -3000,8 +3000,8 @@ extern int famicom_internal_data_save() {
     if (chan >= 0) {
         famicomCommon.unused_save_data_start_ofs = 0x640;
         famicomCommon.memcard_save_comment = commentImageBuffer;
-        famicomCommon.memcard_game_header.flags0.no_copy_flag = FALSE;
-        famicomCommon.memcard_game_header.flags1.no_move_flag = FALSE;
+        Famicom_SetCopyDisabled(&famicomCommon.memcard_game_header, FALSE);
+        Famicom_SetMoveDisabled(&famicomCommon.memcard_game_header, FALSE);
         SetupInternalCommentImage(commentImageBuffer);
 
         if (famicom_save_data_check(famicomCommon.save_data_header, famicomCommon.save_pl_no, famicomCommon.save_data_name) == 0) {
@@ -3018,11 +3018,11 @@ extern int famicom_internal_data_save() {
                 famicomCommon.save_data_header,
                 famicomCommon.save_data_total_size,
                 famicomCommon.memcard_save_comment,
-                famicomCommon.memcard_game_header.flags1.banner_fmt,
-                famicomCommon.memcard_game_header.flags0.comment_type == MEMCARD_COMMENT_TYPE_NONE ? 0xFFFFFFFF : CARD_COMMENT_SIZE,
+                Famicom_GetBannerFormat(&famicomCommon.memcard_game_header),
+                Famicom_GetCommentType(&famicomCommon.memcard_game_header) == MEMCARD_COMMENT_TYPE_NONE ? 0xFFFFFFFF : CARD_COMMENT_SIZE,
                 famicomCommon.memcard_game_header.icon_format,
                 famicomCommon.memcard_game_header.icon_flags,
-                famicomCommon.memcard_game_header.flags0.comment_type == MEMCARD_COMMENT_TYPE_NONE ? 0xFFFFFFFF : 0,
+                Famicom_GetCommentType(&famicomCommon.memcard_game_header) == MEMCARD_COMMENT_TYPE_NONE ? 0xFFFFFFFF : 0,
                 no_save
             );
         }
@@ -3054,7 +3054,7 @@ extern int famicom_external_data_save() {
         chan = famicom_getSaveChan(TRUE, &result);
         if (chan >= 0) {
             if (famicom_save_data_check((FamicomSaveDataHeader*)famicomCommon.save_data_header, -1, famicomCommon.save_data_name) == 0) {
-                if (famicomCommon.nesrom_memcard && famicomCommon.memcard_game_header.flags0.has_comment_img) {
+                if (famicomCommon.nesrom_memcard && Famicom_HasCommentImage(&famicomCommon.memcard_game_header)) {
                     int no_save = ((FamicomSaveDataHeader*)famicomCommon.save_data_header)->no_save;
                     ((FamicomSaveDataHeader*)famicomCommon.save_data_header)->no_save = FALSE;
 
@@ -3068,11 +3068,11 @@ extern int famicom_external_data_save() {
                         (FamicomSaveDataHeader*)famicomCommon.save_data_header,
                         famicomCommon.save_data_total_size,
                         famicomCommon.memcard_save_comment,
-                        famicomCommon.memcard_game_header.flags1.banner_fmt,
-                        famicomCommon.memcard_game_header.flags0.comment_type == MEMCARD_COMMENT_TYPE_NONE ? 0xFFFFFFFF : CARD_COMMENT_SIZE,
+                        Famicom_GetBannerFormat(&famicomCommon.memcard_game_header),
+                        Famicom_GetCommentType(&famicomCommon.memcard_game_header) == MEMCARD_COMMENT_TYPE_NONE ? 0xFFFFFFFF : CARD_COMMENT_SIZE,
                         famicomCommon.memcard_game_header.icon_format,
                         famicomCommon.memcard_game_header.icon_flags,
-                        famicomCommon.memcard_game_header.flags0.comment_type == MEMCARD_COMMENT_TYPE_NONE ? 0xFFFFFFFF : 0,
+                        Famicom_GetCommentType(&famicomCommon.memcard_game_header) == MEMCARD_COMMENT_TYPE_NONE ? 0xFFFFFFFF : 0,
                         no_save
                     );
                 }
