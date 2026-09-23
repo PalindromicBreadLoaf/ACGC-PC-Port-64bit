@@ -13,8 +13,8 @@ extern "C" {
 
 dspch_* GetDSPchannelHandle(u32 idx);
 void InitDSPchannel();
-dspch_* AllocDSPchannel(u32, u32);
-int DeAllocDSPchannel(dspch_*, u32);
+dspch_* AllocDSPchannel(u32, jc_*);
+int DeAllocDSPchannel(dspch_*, jc_*);
 dspch_* GetLowerDSPchannel();
 dspch_* GetLowerActiveDSPchannel();
 BOOL ForceStopDSPchannel(dspch_*);

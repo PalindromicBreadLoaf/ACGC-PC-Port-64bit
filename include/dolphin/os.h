@@ -2,6 +2,9 @@
 #define _DOLPHIN_OS
 
 #include "types.h"
+#ifdef TARGET_PC
+#include "pc_portability.h"
+#endif
 #include "dolphin/os/OSAlloc.h"
 #include "dolphin/os/OSArena.h"
 #include "dolphin/os/OSCache.h"
@@ -153,10 +156,18 @@ vu16 __OSDeviceCode AT_ADDRESS(OS_BASE_CACHED | 0x30E6);
 #define OSNanosecondsToTicks(nsec) (((nsec) * (OS_TIMER_CLOCK / 125000)) / 8000)
 #define OSMicrosecondsToTicks(usec) (((usec) * (OS_TIMER_CLOCK / 125000)) / 8)
 
+#ifdef TARGET_PC
+void *OSPhysicalToCached(gc_addr32_t paddr);
+void *OSPhysicalToUncached(gc_addr32_t paddr);
+gc_addr32_t OSCachedToPhysical(void *caddr);
+gc_addr32_t OSUncachedToPhysical(void *ucaddr);
+BOOL pc_os_cached_to_physical(const void* caddr, gc_addr32_t* paddr);
+#else
 void *OSPhysicalToCached(u32 paddr);
 void *OSPhysicalToUncached(u32 paddr);
 u32 OSCachedToPhysical(void *caddr);
 u32 OSUncachedToPhysical(void *ucaddr);
+#endif
 void *OSCachedToUncached(void *caddr);
 void *OSUncachedToCached(void *ucaddr);
 #ifdef TARGET_PC
@@ -172,7 +183,11 @@ void *OSUncachedToCached(void *ucaddr);
 #define OSUncachedToCached(ucaddr)   ((void*) ((u8*)(ucaddr) - (OS_BASE_UNCACHED - OS_BASE_CACHED)))
 #endif
 
+#ifdef TARGET_PC
+#define OFFSET(addr, align) (((uintptr_t)(addr) & ((align)-1)))
+#else
 #define OFFSET(addr, align) (((u32)(addr) & ((align)-1)))
+#endif
 
 #ifdef __cplusplus
 }

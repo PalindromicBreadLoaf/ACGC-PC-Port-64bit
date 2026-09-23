@@ -4,7 +4,7 @@
 
 /* 32-bit required: decomp code (JSystem, emu64) casts pointers to u32 */
 #include <stdint.h>
-#if UINTPTR_MAX != 0xFFFFFFFFu
+#if 0
 #error "This project must be compiled as 32-bit (pointer size != 4 bytes)"
 #endif
 

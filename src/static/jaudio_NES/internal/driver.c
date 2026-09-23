@@ -10,6 +10,9 @@
 #include "jaudio_NES/system.h"
 #include "dolphin/os/OSCache.h"
 #include "types.h"
+#ifdef TARGET_PC
+#include "pc_portability.h"
+#endif
 
 #define DMEM_TEMP 0x380
 #define DMEM_WET_TEMP 0x3A0
@@ -986,8 +989,15 @@ codec_continue_and_skip:
                         return cmd;
                     } else {
                         // This medium is not in ram, so dma the requested sample into ram
-                        samplesToLoadAddr = (u8*)Nas_WaveDmaCallBack((u32)(tmpSamplesToLoadAddr),
-                        sampleDataChunkSize, flags,
+#ifdef TARGET_PC
+                        u32 device_addr;
+                        if (!pc_u32_from_host_addr((uintptr_t)tmpSamplesToLoadAddr, &device_addr)) {
+                            return cmd;
+                        }
+#else
+                        u32 device_addr = (u32)tmpSamplesToLoadAddr;
+#endif
+                        samplesToLoadAddr = (u8*)Nas_WaveDmaCallBack(device_addr, sampleDataChunkSize, flags,
                             &driver->sample_dma_idx, sample->medium);
                     }
 
@@ -999,7 +1009,7 @@ codec_continue_and_skip:
 
                     // Move the raw sample chunk from ram to the rsp
                     // DMEM at the addresses before DMEM_COMPRESSED_ADPCM_DATA
-                    sampleDataChunkAlignPad = (u32)samplesToLoadAddr & 0xF;
+                    sampleDataChunkAlignPad = (u32)((uintptr_t)samplesToLoadAddr & 0xF);
                     aLoadCache(cmd++, samplesToLoadAddr - sampleDataChunkAlignPad, sampleDataDmemAddr,
                                 sampleDataChunkSize);
                 } else {

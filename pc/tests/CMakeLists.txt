@@ -129,3 +129,26 @@ target_compile_options(pc_serialized_layout_tests PRIVATE
 )
 
 add_test(NAME pc_serialized_layout COMMAND pc_serialized_layout_tests)
+
+add_executable(pc_aram_tests
+    aram_tests.c
+    ../src/pc_aram.c
+)
+
+target_include_directories(pc_aram_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+)
+
+target_compile_definitions(pc_aram_tests PRIVATE TARGET_PC _LANGUAGE_C)
+target_compile_options(pc_aram_tests PRIVATE
+    -Wall
+    -Wextra
+    -Werror
+    -Wconversion
+    -Wno-comment
+    -Wpointer-to-int-cast
+    -Wint-to-pointer-cast
+)
+
+add_test(NAME pc_aram COMMAND pc_aram_tests)

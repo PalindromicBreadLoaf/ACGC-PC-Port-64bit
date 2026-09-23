@@ -3559,8 +3559,8 @@ extern void Na_KishaStatusTrg(u8 a) {
     }
 }
 
-extern void Na_KishaStatusLevel(f32 speed, u32 ongenNum1, u16 angle1, f32 distance1, u32 ongenNum2, u16 angle2,
-                                f32 distance2) {
+extern void Na_KishaStatusLevel(f32 speed, runtime_id_t ongenNum1, u16 angle1, f32 distance1,
+                                runtime_id_t ongenNum2, u16 angle2, f32 distance2) {
     f32 f30 = 0.f;
     f32 f29 = 0.f;
     sou_kisha_angle = angle1;

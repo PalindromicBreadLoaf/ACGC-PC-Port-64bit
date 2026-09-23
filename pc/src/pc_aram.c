@@ -1,5 +1,10 @@
-/* pc_aram.c - GC's 16MB auxiliary RAM, replaced with a malloc'd buffer */
-#include "pc_platform.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#include "dolphin/ar.h"
+
+#define PC_ARAM_SIZE (16u * 1024u * 1024u)
 
 static u8* aram_base = NULL;
 static u32 aram_alloc_ptr = 0;
@@ -22,8 +27,12 @@ u32 ARGetBaseAddress(void) { return 0; }
 u32 ARGetSize(void) { return PC_ARAM_SIZE; }
 
 u32 ARAlloc(u32 size) {
-    u32 aligned_size = (size + 31) & ~31; /* 32-byte align */
-    if (aram_alloc_ptr + aligned_size > PC_ARAM_SIZE) {
+    u32 aligned_size;
+    if (size > UINT32_MAX - UINT32_C(31)) {
+        return 0;
+    }
+    aligned_size = (size + UINT32_C(31)) & ~UINT32_C(31);
+    if (aligned_size > PC_ARAM_SIZE - aram_alloc_ptr) {
         fprintf(stderr, "[PC/ARAM] Out of ARAM! Requested %u, used %u/%u\n",
                 size, aram_alloc_ptr, PC_ARAM_SIZE);
         return 0;
@@ -33,49 +42,53 @@ u32 ARAlloc(u32 size) {
     return addr;
 }
 
-void ARFree(u32* addr) {
+u32 ARFree(u32* addr) {
     (void)addr; /* bump allocator, no-op */
+    return 0;
 }
 
-/* type 0 = MRAM→ARAM, type 1 = ARAM→MRAM. params are always (type, mram, aram). */
-void ARStartDMA(u32 type, u32 mram_addr, u32 aram_addr, u32 length) {
-    if (!aram_base) return;
-
-    /* some code passes (aram_base + offset) instead of just the offset */
-    u32 base = (u32)(uintptr_t)aram_base;
-    if (aram_addr >= base && aram_addr < base + PC_ARAM_SIZE) {
-        aram_addr -= base;
+BOOL pc_aram_transfer(u32 type, void* mram_addr, aram_addr_t aram_addr, u32 length) {
+    if (aram_base == NULL || (type != ARAM_DIR_MRAM_TO_ARAM && type != ARAM_DIR_ARAM_TO_MRAM)) {
+        return FALSE;
     }
-
+    if (length != 0 && mram_addr == NULL) {
+        return FALSE;
+    }
     if (length > PC_ARAM_SIZE || aram_addr > PC_ARAM_SIZE - length) {
-        /* OOB read: zero-fill dest so caller doesn't get garbage (cap 1MB) */
-        if (type == 1 && mram_addr != 0 && length > 0 && length <= 0x100000) {
-            memset((void*)(uintptr_t)mram_addr, 0, length);
-        }
-        return;
+        return FALSE;
     }
 
-    if (type == 0) {
-        memcpy(aram_base + aram_addr, (void*)(uintptr_t)mram_addr, length);
+    if (type == ARAM_DIR_MRAM_TO_ARAM) {
+        memmove(aram_base + aram_addr, mram_addr, length);
     } else {
-        memcpy((void*)(uintptr_t)mram_addr, aram_base + aram_addr, length);
+        memmove(mram_addr, aram_base + aram_addr, length);
     }
+    return TRUE;
+}
+
+void ARStartDMA(u32 type, void* mram_addr, aram_addr_t aram_addr, u32 length) {
+    (void)pc_aram_transfer(type, mram_addr, aram_addr, length);
 }
 
 u32 ARGetInternalSize(void) { return PC_ARAM_SIZE; }
 BOOL ARCheckInit(void) { return aram_base != NULL; }
 
-/* ARQ - synchronous wrapper around ARStartDMA.
- * ARQPostRequest's source/dest order differs from ARStartDMA's, so we remap. */
 void ARQInit(void) {}
-void ARQPostRequest(void* req, u32 owner, u32 type, u32 prio,
-                    u32 source, u32 dest, u32 length, void* callback) {
-    if (type == 0) {
-        ARStartDMA(type, source, dest, length); /* source=mram, dest=aram */
-    } else {
-        ARStartDMA(type, dest, source, length); /* source=aram, dest=mram — swapped */
+void ARQPostRequest(ARQRequest* req, ARQOwner owner, u32 type, u32 prio, void* mram_addr,
+                    aram_addr_t aram_addr, u32 length, ARQCallback callback) {
+    if (req != NULL) {
+        req->owner = owner;
+        req->type = type;
+        req->priority = prio;
+        req->mramAddress = mram_addr;
+        req->aramAddress = aram_addr;
+        req->length = length;
+        req->callback = callback;
     }
-    if (callback) ((void (*)(u32))callback)((u32)(uintptr_t)req);
+    ARStartDMA(type, mram_addr, aram_addr, length);
+    if (callback != NULL) {
+        callback((uintptr_t)req);
+    }
 }
 
 void ARQFlushQueue(void) {}

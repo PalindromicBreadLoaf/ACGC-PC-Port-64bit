@@ -7,6 +7,8 @@
 #define REFRESH_RATE_DEVIATION_NTSC 1.00278f
 #define REFRESH_RATE_NTSC 60
 
+typedef struct ArcHeader_ ArcHeader;
+
 typedef enum SET_EXT_POINTER_TYPE {
     EXT_POINTER_TYPE_ADDR,
     EXT_POINTER_TYPE_SIZE,
@@ -31,6 +33,7 @@ extern s32 Nas_StartSeq_Skip(s32 group, s32 seq, s32 skip_ticks);
 extern s32 Nas_LoadVoice(s32 progId, s32 instId, s32 percId);
 
 extern void Nas_PreLoadSeq(s32 seq, s32 flags, s32 param, OSMesgQueue* mq);
+extern uintptr_t Nas_GetArcAddress(ArcHeader* header, s32 idx);
 
 extern s32 Nas_PreLoadWave_BG(s32 bankId, s32 param2, s32 param3, OSMesgQueue* mq);
 extern s32 Nas_PreLoadBank_BG(s32 bankId, s32 param2, s32 param3, OSMesgQueue* mq);
@@ -39,7 +42,11 @@ extern s32 Nas_PreLoadSeq_BG(s32 seqId, s32 param2, s32 param3, OSMesgQueue* mq)
 extern void Nas_FlushBank(s32 seqId);
 extern u8 Nas_MapHeaderReadByte(s32 byteIndex);
 
+#ifdef TARGET_PC
+extern void Nas_SetExtPointer(s32 type, s32 idx, s32 set_type, uintptr_t param);
+#else
 extern void Nas_SetExtPointer(s32 type, s32 idx, s32 set_type, s32 param);
+#endif
 
 extern void Nas_WaveDmaFrameWork(void);
 extern void Nas_BgDmaFrameWork(s32 reset_status);

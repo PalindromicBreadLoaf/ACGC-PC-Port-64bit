@@ -17,16 +17,16 @@ CtrlGroup_* CGRP_ARRAY[16];
  * Size:	000038
  */
 
-static void PTconvert(void** pointer, u32 base_address)
+static void PTconvert(void** pointer, uintptr_t base_address)
 {
 	if (*pointer == NULL) {
 		*pointer = NULL;
 		return;
 	}
-	if (*pointer >= (void*)base_address || *pointer == NULL) {
+	if ((uintptr_t)*pointer >= base_address) {
 		return;
 	}
-	*pointer = *(char**)pointer + base_address;
+	*pointer = (void*)(base_address + (uintptr_t)*pointer);
 }
 
 /*
@@ -36,7 +36,7 @@ static void PTconvert(void** pointer, u32 base_address)
  */
 CtrlGroup_* Wave_Test(u8* data)
 {
-    u32 base_addr = (u32)data;
+    uintptr_t base_addr = (uintptr_t)data;
 	CtrlGroup_* group;
 	SCNE_* scene;
 	Ctrl_* cst;

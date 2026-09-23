@@ -114,8 +114,8 @@ void AIInit(u8* stack) {
     }
 }
 
-void AIInitDMA(u32 addr, u32 size) {
-    s16* src = (s16*)(uintptr_t)addr;
+void AIInitDMA(void* addr, u32 size) {
+    s16* src = (s16*)addr;
     u32 n_samples = size / sizeof(s16);
     n_samples &= ~1u; /* whole stereo frames */
 

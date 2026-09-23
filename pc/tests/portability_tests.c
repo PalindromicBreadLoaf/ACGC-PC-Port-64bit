@@ -36,6 +36,7 @@ _Static_assert(sizeof(n64_segaddr_t) == 4, "segmented addresses must remain 32-b
 _Static_assert(sizeof(aram_addr_t) == 4, "ARAM addresses must remain 32-bit");
 _Static_assert(sizeof(dvd_offset_t) == 4, "DVD offsets must remain 32-bit");
 _Static_assert(sizeof(pc_gbi_handle_t) == 4, "GBI handles must remain 32-bit");
+_Static_assert(sizeof(runtime_id_t) == sizeof(void*), "runtime IDs must hold pointers");
 _Static_assert(sizeof(Gfx) == 8, "Gfx layout changed");
 _Static_assert(sizeof(Vtx) == 16, "Vtx layout changed");
 _Static_assert(sizeof(Mtx) == 64, "N64 matrix layout changed");

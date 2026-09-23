@@ -60,9 +60,8 @@ typedef enum DSPChannelAllocState {
  * Address:	8000AD60
  * Size:	000114
  */
-dspch_* AllocDSPchannel(u32 param_1, u32 param_2)
+dspch_* AllocDSPchannel(u32 param_1, jc_* jc)
 {
-    jc_* jc = (jc_*)param_2;
 	s32 i;
 	
 	if (param_1 == 0) {
@@ -102,12 +101,12 @@ dspch_* AllocDSPchannel(u32 param_1, u32 param_2)
  * Address:	8000AE80
  * Size:	0000DC
  */
-int DeAllocDSPchannel(dspch_* chan, u32 id)
+int DeAllocDSPchannel(dspch_* chan, jc_* id)
 {
 	if (chan == NULL) {
 		return -1;
 	}
-	if (chan->_08 != (jc_*)id) {
+	if (chan->_08 != id) {
 		return -2;
 	}
 

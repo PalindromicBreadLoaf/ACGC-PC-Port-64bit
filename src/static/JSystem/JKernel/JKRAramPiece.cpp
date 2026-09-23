@@ -12,12 +12,22 @@
 JSUList<JKRAMCommand> JKRAramPiece::sAramPieceCommandList;
 OSMutex JKRAramPiece::mMutex;
 
+#ifdef TARGET_PC
+JKRAMCommand* JKRAramPiece::prepareCommand(int direction, void* mramAddress, aram_addr_t aramAddress, u32 length,
+                                           JKRAramBlock* aramBlock, JKRAMCommand::AMCommandCallback callback) {
+#else
 JKRAMCommand* JKRAramPiece::prepareCommand(int direction, u32 source, u32 destination, u32 length,
                                            JKRAramBlock* aramBlock, JKRAMCommand::AMCommandCallback callback) {
+#endif
     JKRAMCommand* cmd = new (JKRGetSystemHeap(), -4) JKRAMCommand();
     cmd->mDirection = direction;
+#ifdef TARGET_PC
+    cmd->mMramAddress = mramAddress;
+    cmd->mAramAddress = aramAddress;
+#else
     cmd->mSource = source;
     cmd->mDestination = destination;
+#endif
     cmd->mAramBlock = aramBlock;
     cmd->mLength = length;
     cmd->mCallback = callback;
@@ -29,10 +39,25 @@ void JKRAramPiece::sendCommand(JKRAMCommand* cmd) {
     JKRAramPiece::startDMA(cmd);
 }
 
+#ifdef TARGET_PC
+JKRAMCommand* JKRAramPiece::orderAsync(int direction, void* mramAddress, aram_addr_t aramAddress, u32 length,
+                                       JKRAramBlock* aramBlock, JKRAMCommand::AMCommandCallback callback) {
+#else
 JKRAMCommand* JKRAramPiece::orderAsync(int direction, u32 source, u32 destination, u32 length, JKRAramBlock* aramBlock,
                                        JKRAMCommand::AMCommandCallback callback) {
+#endif
     JKRAramPiece::lock();
 
+#ifdef TARGET_PC
+    if (!JKR_ISALIGNED32((uintptr_t)mramAddress) || !JKR_ISALIGNED32(aramAddress)) {
+        JLOGF("direction = %x\n", direction);
+        JLOGF("mram = %p\n", mramAddress);
+        JLOGF("aram = %x\n", aramAddress);
+        JLOGF("length = %x\n", length);
+        JPANICLINE(102);
+    }
+    JKRAMCommand* cmd = JKRAramPiece::prepareCommand(direction, mramAddress, aramAddress, length, aramBlock, callback);
+#else
     if (!JKR_ISALIGNED32(source) || !JKR_ISALIGNED32(destination)) {
         JLOGF("direction = %x\n", direction);
         JLOGF("source = %x\n", source);
@@ -42,6 +67,7 @@ JKRAMCommand* JKRAramPiece::orderAsync(int direction, u32 source, u32 destinatio
     }
 
     JKRAMCommand* cmd = JKRAramPiece::prepareCommand(direction, source, destination, length, aramBlock, callback);
+#endif
 
 #ifdef TARGET_PC
     /* On PC, execute DMA synchronously (no worker thread) */
@@ -81,10 +107,19 @@ bool JKRAramPiece::sync(JKRAMCommand* cmd, BOOL noBlock) {
     }
 }
 
+#ifdef TARGET_PC
+bool JKRAramPiece::orderSync(int direction, void* mramAddress, aram_addr_t aramAddress, u32 length,
+                             JKRAramBlock* aramBlock) {
+#else
 bool JKRAramPiece::orderSync(int direction, u32 source, u32 destination, u32 length, JKRAramBlock* aramBlock) {
+#endif
     JKRAramPiece::lock();
 
+#ifdef TARGET_PC
+    JKRAMCommand* cmd = JKRAramPiece::orderAsync(direction, mramAddress, aramAddress, length, aramBlock, nullptr);
+#else
     JKRAMCommand* cmd = JKRAramPiece::orderAsync(direction, source, destination, length, aramBlock, nullptr);
+#endif
     bool res = JKRAramPiece::sync(cmd, FALSE);
     delete cmd;
 
@@ -93,6 +128,15 @@ bool JKRAramPiece::orderSync(int direction, u32 source, u32 destination, u32 len
 }
 
 void JKRAramPiece::startDMA(JKRAMCommand* cmd) {
+#ifdef TARGET_PC
+    if (cmd->mDirection == ARAM_DIR_ARAM_TO_MRAM) {
+        DCInvalidateRange(cmd->mMramAddress, cmd->mLength);
+    } else {
+        DCStoreRange(cmd->mMramAddress, cmd->mLength);
+    }
+    ARQPostRequest(cmd, 0, cmd->mDirection, 0, cmd->mMramAddress, cmd->mAramAddress, cmd->mLength,
+                   JKRAramPiece::doneDMA);
+#else
     if (cmd->mDirection == ARAM_DIR_ARAM_TO_MRAM) {
         DCInvalidateRange((u8*)cmd->mDestination, cmd->mLength);
     } else { /* cmd->mDirection == ARAM_DIR_MRAM_TO_ARAM */
@@ -100,12 +144,21 @@ void JKRAramPiece::startDMA(JKRAMCommand* cmd) {
     }
 
     ARQPostRequest(cmd, 0, cmd->mDirection, 0, cmd->mSource, cmd->mDestination, cmd->mLength, JKRAramPiece::doneDMA);
+#endif
 }
 
+#ifdef TARGET_PC
+void JKRAramPiece::doneDMA(uintptr_t param) {
+#else
 void JKRAramPiece::doneDMA(u32 param) {
+#endif
     JKRAMCommand* cmd = (JKRAMCommand*)param;
     if (cmd->mDirection == ARAM_DIR_ARAM_TO_MRAM) {
+#ifdef TARGET_PC
+        DCInvalidateRange(cmd->mMramAddress, cmd->mLength);
+#else
         DCInvalidateRange((u8*)cmd->mDestination, cmd->mLength);
+#endif
     }
     if (cmd->mCallbackType != ARAMPIECE_DONE_CALLBACK) {
         if (cmd->mCallbackType == ARAMPIECE_DONE_DECOMPRESS) {

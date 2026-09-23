@@ -209,7 +209,11 @@ typedef struct insect_actor_s {
     int s32_work0;
     int s32_work1;
     int s32_work2;
+#ifdef TARGET_PC
+    uintptr_t s32_work3;
+#else
     int s32_work3;
+#endif
 
     f32 f32_work0;
     f32 f32_work1;

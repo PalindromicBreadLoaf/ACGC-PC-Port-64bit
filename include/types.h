@@ -54,6 +54,12 @@ typedef unsigned long long u64;
 #endif
 typedef unsigned int uint;
 
+#ifdef TARGET_PC
+typedef uintptr_t runtime_id_t;
+#else
+typedef u32 runtime_id_t;
+#endif
+
 typedef volatile u8 vu8;
 typedef volatile u16 vu16;
 typedef volatile u32 vu32;

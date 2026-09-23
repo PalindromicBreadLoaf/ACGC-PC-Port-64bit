@@ -1,5 +1,6 @@
 /* pc_os.c - Dolphin OS replacement: arena, timers, threads, message queues */
 #include "pc_platform.h"
+#include "pc_portability.h"
 
 #include <time.h>
 
@@ -339,10 +340,33 @@ void OSChangeBootMode(u32 mode) { (void)mode; }
 int __osResetSwitchPressed = 0;
 
 /* --- Address translation (physical addr → arena_memory offset) --- */
-void* OSPhysicalToCached(u32 paddr) { return (void*)(arena_memory + paddr); }
-void* OSPhysicalToUncached(u32 paddr) { return (void*)(arena_memory + paddr); }
-u32 OSCachedToPhysical(void* caddr) { return (u32)((u8*)caddr - arena_memory); }
-u32 OSUncachedToPhysical(void* ucaddr) { return (u32)((u8*)ucaddr - arena_memory); }
+void* OSPhysicalToCached(gc_addr32_t paddr) {
+    if (arena_memory == NULL || paddr >= PC_MAIN_MEMORY_SIZE) {
+        return NULL;
+    }
+    return arena_memory + paddr;
+}
+void* OSPhysicalToUncached(gc_addr32_t paddr) { return OSPhysicalToCached(paddr); }
+BOOL pc_os_cached_to_physical(const void* caddr, gc_addr32_t* paddr) {
+    uintptr_t address;
+    uintptr_t base;
+    if (arena_memory == NULL || caddr == NULL || paddr == NULL) {
+        return FALSE;
+    }
+    address = (uintptr_t)caddr;
+    base = (uintptr_t)arena_memory;
+    if (address < base || address - base >= PC_MAIN_MEMORY_SIZE) {
+        return FALSE;
+    }
+    *paddr = (gc_addr32_t)(address - base);
+    return TRUE;
+}
+gc_addr32_t OSCachedToPhysical(void* caddr) {
+    gc_addr32_t paddr = UINT32_MAX;
+    (void)pc_os_cached_to_physical(caddr, &paddr);
+    return paddr;
+}
+gc_addr32_t OSUncachedToPhysical(void* ucaddr) { return OSCachedToPhysical(ucaddr); }
 void* OSCachedToUncached(void* caddr) { return caddr; }
 void* OSUncachedToCached(void* ucaddr) { return ucaddr; }
 

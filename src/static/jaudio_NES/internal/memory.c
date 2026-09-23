@@ -1369,7 +1369,7 @@ void __RestoreAddr(Wavelookuptable* a, smzwavetable* b) {
         u8* o = a_sample + a->_08;
         if (b_sample >= a_sample && b_sample < o) {
             // fakematch?
-            b->sample = (u8*)((u32)a->_04 + (b->sample - (u32)a->sample));
+            b->sample = a->_04 + (b_sample - a_sample);
             if (EXGTYPE == 0) {
                 b->medium = a->medium;
             } else {
@@ -1418,11 +1418,11 @@ void __ExchangeWave(s32 a, s32 b) {
     if (pWaveTable->sample) {
         pWaveTable->_08 = (s32)wave_header[b].entries[0].size;
         pWaveTable->medium = wave_header[b].entries[0].medium;
-        pWaveTable->_04 = (u8*)wave_header[b].entries[0].addr;
+        pWaveTable->_04 = (u8*)Nas_GetArcAddress(wave_header, b);
         switch (a) {
             case 1: {
                 pWaveTable->_04 = alloc;
-                pWaveTable->sample = (u8*)wave_header[b].entries[0].addr;
+                pWaveTable->sample = (u8*)Nas_GetArcAddress(wave_header, b);
             } break;
             case 0:
             default:

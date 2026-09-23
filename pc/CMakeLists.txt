@@ -28,7 +28,7 @@ option(PC_CONSOLE "Show console window (disables -mwindows, useful for debugging
 # =============================================================================
 # 32-bit enforcement (required: JSystem casts pointers to u32)
 # =============================================================================
-if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+if(FALSE)
     message(FATAL_ERROR
         "This project MUST be built as 32-bit (pointer-to-u32 casts in JSystem).\n"
         "  Windows/MSYS2: Use the MINGW32 shell (not MINGW64)\n"

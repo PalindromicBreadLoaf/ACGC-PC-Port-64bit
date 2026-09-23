@@ -3,6 +3,7 @@
 
 #include "types.h"
 #include "dolphin/dsp.h"
+#include "jaudio_NES/dspproc.h"
 
 /////////// JAUDIO IPL DEC DEFINITIONS ///////////
 // Global functions (all C++, so no extern C wrap).
@@ -24,7 +25,7 @@ void Jac_DSPagbDecodeAsync(void* task, void* cmd, DSPCallback callback);
  */
 typedef struct DSPTask {
 	u8 target;            // _00, ipl (gc) or agb (gameboy player)
-	u32 cmd;              // _04
+	dsp_cmd_addr_t cmd;   // _04
 	void* task;           // _08
 	DSPCallback callback; // _0C
 } DSPTask;

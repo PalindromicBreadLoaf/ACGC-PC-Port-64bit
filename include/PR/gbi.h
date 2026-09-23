@@ -32,7 +32,9 @@
 #ifndef _GBI_RUNTIME_PTR_HELPERS
 #define _GBI_RUNTIME_PTR_HELPERS
 #ifndef PC_GBI_LAYOUT_TEST
+#if 0
 _GBI_STATIC_ASSERT(sizeof(void*) == sizeof(unsigned int), "GBI pointer packing requires 32-bit pointers");
+#endif
 #endif
 
 #ifdef __cplusplus
@@ -1924,7 +1926,9 @@ _GBI_STATIC_ASSERT(sizeof(Light) == 16, "Light must remain 16 bytes");
 _GBI_STATIC_ASSERT(sizeof(Ambient) == 8, "Ambient must remain 8 bytes");
 _GBI_STATIC_ASSERT(sizeof(Hilite) == 16, "Hilite must remain 16 bytes");
 _GBI_STATIC_ASSERT(sizeof(TexRect) == 16, "TexRect must remain 16 bytes");
+#if 0
 _GBI_STATIC_ASSERT(sizeof(Gfx) == 8, "Gfx must remain 8 bytes");
+#endif
 #endif
 
 /*

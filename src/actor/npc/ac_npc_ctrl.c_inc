@@ -520,7 +520,7 @@ static int aNPC_setupActor_proc(GAME_PLAY* play, mActor_name_t name, s8 idx, int
 
 #ifndef aNPC_NPC2
 #ifdef TARGET_PC
-#define aNPC_ACTOR_CLASS_SLOT_SIZE 0xA50
+#define aNPC_ACTOR_CLASS_SLOT_SIZE (sizeof(NPC_ACTOR) + 15)
 #else
 #define aNPC_ACTOR_CLASS_SLOT_SIZE 0x9D0
 #endif
@@ -653,8 +653,8 @@ static ACTOR* aNPC_get_actor_area_proc(size_t size, const char* actor_name, int 
 #ifdef TARGET_PC
         extern int g_pc_verbose;
         if (g_pc_verbose) {
-            printf("[NPC] actor slot REJECTED: size=0x%x > slot=0x%x (%s:%d)\n", (unsigned)size,
-                   aNPC_ACTOR_CLASS_SLOT_SIZE, actor_name, line);
+            printf("[NPC] actor slot REJECTED: size=0x%zx > slot=0x%zx (%s:%d)\n", size,
+                   (size_t)aNPC_ACTOR_CLASS_SLOT_SIZE, actor_name, line);
         }
 #endif
         return NULL;
@@ -747,7 +747,11 @@ static void aNPC_keep_actor_class(void) {
     int i;
 
     for (i = 0; i < 9; i++) {
+#ifdef TARGET_PC
+        *actor = (NPC_ACTOR*)ALIGN_NEXT((uintptr_t)aNPC_n_actor_cl_tbl[i].buf, 16);
+#else
         *actor = (NPC_ACTOR*)ALIGN_NEXT((u32)aNPC_n_actor_cl_tbl[i].buf, 16);
+#endif
         *used = FALSE;
 
         actor++;

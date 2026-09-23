@@ -1025,7 +1025,13 @@ extern void mPlib_Object_Exchange_keep_new_PlayerMdl(GAME_PLAY* play) {
     actor_dlftbls[player_data->profile].profile->obj_bank_id = mPlib_get_player_Object_Bank();
 }
 
-static int mPlib_Object_Exchange_keep_new(GAME_PLAY* play, s16 bank, u32 src, u32 size, int aram_flag) {
+typedef struct mPlib_resource_c {
+    const void* host_ptr;
+    u32 aram_addr;
+    int in_aram;
+} mPlib_resource_c;
+
+static int mPlib_Object_Exchange_keep_new(GAME_PLAY* play, s16 bank, mPlib_resource_c src, u32 size) {
     Object_Exchange_c* obj_ex = &play->object_exchange;
     Object_Bank_c* bank_p = &obj_ex->banks[obj_ex->bank_idx];
 
@@ -1034,11 +1040,11 @@ static int mPlib_Object_Exchange_keep_new(GAME_PLAY* play, s16 bank, u32 src, u3
     bank_p->ram_start = obj_ex->next_bank_ram_address;
     bank_p->size = size;
 
-    if (src != 0) {
-        if (aram_flag) {
-            _JW_GetResourceAram(src, (u8*)bank_p->dma_start, size);
+    if (src.host_ptr != NULL || src.aram_addr != 0) {
+        if (src.in_aram) {
+            _JW_GetResourceAram(src.aram_addr, (u8*)bank_p->dma_start, size);
         } else {
-            bcopy((void*)src, bank_p->dma_start, size);
+            bcopy(src.host_ptr, bank_p->dma_start, size);
         }
 
         DCStoreRangeNoSync(bank_p->ram_start, size);
@@ -1067,11 +1073,13 @@ static int Change_Player_face_bank_ID_Index(void) {
     return Player_face_bank_ID_Index;
 }
 
-extern u32 mPlib_Get_PlayerTexRom_p(int idx) {
+static mPlib_resource_c mPlib_Get_PlayerTexResource(int idx) {
+    mPlib_resource_c resource;
+
     if (mPlib_Check_PlayerClothInAram(idx)) {
-        u32 addr = JW_GetAramAddress(RESOURCE_TEX_BOY);
-        addr += idx * mNW_DESIGN_TEX_SIZE;
-        return addr;
+        resource.host_ptr = NULL;
+        resource.aram_addr = JW_GetAramAddress(RESOURCE_TEX_BOY) + idx * mNW_DESIGN_TEX_SIZE;
+        resource.in_aram = TRUE;
     } else {
         int org_idx = idx - (CLOTH_NUM + 1);
 
@@ -1079,29 +1087,37 @@ extern u32 mPlib_Get_PlayerTexRom_p(int idx) {
             org_idx = 0;
         }
 
-        return (u32)Now_Private->my_org[org_idx & 7].design.data;
+        resource.host_ptr = Now_Private->my_org[org_idx & 7].design.data;
+        resource.aram_addr = 0;
+        resource.in_aram = FALSE;
     }
+
+    return resource;
 }
 
-static u32 mPlib_Get_UseTexRom_p(void) {
-    return mPlib_Get_PlayerTexRom_p(Now_Private->cloth.idx);
+#ifndef TARGET_PC
+extern uintptr_t mPlib_Get_PlayerTexRom_p(int idx) {
+    mPlib_resource_c resource = mPlib_Get_PlayerTexResource(idx);
+    return resource.in_aram ? resource.aram_addr : (uintptr_t)resource.host_ptr;
 }
+#endif
 
 static int Player_Tex_bank_ID[] = { -1, -1 };
 
 extern void mPlib_Object_Exchange_keep_new_PlayerTex(GAME_PLAY* play, int bank_idx, int bank) {
-    u32 tex = mPlib_Get_UseTexRom_p();
-    int idx = mPlib_Object_Exchange_keep_new(play, ACTOR_OBJ_BANK_14, tex, mNW_DESIGN_TEX_SIZE,
-                                             mPlib_Check_PlayerClothInAram(Now_Private->cloth.idx));
+    mPlib_resource_c tex = mPlib_Get_PlayerTexResource(Now_Private->cloth.idx);
+    int idx = mPlib_Object_Exchange_keep_new(play, ACTOR_OBJ_BANK_14, tex, mNW_DESIGN_TEX_SIZE);
 
     Player_Tex_bank_ID[bank_idx] = bank + idx;
 }
 
-extern u32 mPlib_Get_PlayerPalletRom_p(int idx) {
+static mPlib_resource_c mPlib_Get_PlayerPalletResource(int idx) {
+    mPlib_resource_c resource;
+
     if (mPlib_Check_PlayerClothInAram(idx)) {
-        u32 addr = JW_GetAramAddress(RESOURCE_PALLET_BOY);
-        addr += idx * mNW_PALETTE_SIZE;
-        return addr;
+        resource.host_ptr = NULL;
+        resource.aram_addr = JW_GetAramAddress(RESOURCE_PALLET_BOY) + idx * mNW_PALETTE_SIZE;
+        resource.in_aram = TRUE;
     } else {
         int org_idx = idx - (CLOTH_NUM + 1);
 
@@ -1109,13 +1125,20 @@ extern u32 mPlib_Get_PlayerPalletRom_p(int idx) {
             org_idx = 0;
         }
 
-        return (u32)mNW_PaletteIdx2Palette(Now_Private->my_org[org_idx & 7].palette);
+        resource.host_ptr = mNW_PaletteIdx2Palette(Now_Private->my_org[org_idx & 7].palette);
+        resource.aram_addr = 0;
+        resource.in_aram = FALSE;
     }
+
+    return resource;
 }
 
-static u32 mPlib_Get_UsePalletRom_p(void) {
-    return mPlib_Get_PlayerPalletRom_p(Now_Private->cloth.idx);
+#ifndef TARGET_PC
+extern uintptr_t mPlib_Get_PlayerPalletRom_p(int idx) {
+    mPlib_resource_c resource = mPlib_Get_PlayerPalletResource(idx);
+    return resource.in_aram ? resource.aram_addr : (uintptr_t)resource.host_ptr;
 }
+#endif
 
 #ifdef TARGET_PC
 static void mPlib_ByteSwapPlayerPalette(u16* pal);
@@ -1124,13 +1147,13 @@ static void mPlib_ByteSwapPlayerPalette(u16* pal);
 static int Player_Pallet_bank_ID[] = { -1, -1 };
 
 extern void mPlib_Object_Exchange_keep_new_PlayerPallet(GAME_PLAY* play, int bank_idx, int bank) {
-    u32 pal = mPlib_Get_UsePalletRom_p();
-    int in_aram = mPlib_Check_PlayerClothInAram(Now_Private->cloth.idx);
+    mPlib_resource_c pal = mPlib_Get_PlayerPalletResource(Now_Private->cloth.idx);
+    int in_aram = pal.in_aram;
     int bank_no;
     Object_Exchange_c* obj_ex = &play->object_exchange;
 
-    Player_Pallet_bank_ID[bank_idx] = bank + mPlib_Object_Exchange_keep_new(play, ACTOR_OBJ_BANK_15, pal, mNW_PALETTE_SIZE,
-                                                                             in_aram);
+    Player_Pallet_bank_ID[bank_idx] =
+        bank + mPlib_Object_Exchange_keep_new(play, ACTOR_OBJ_BANK_15, pal, mNW_PALETTE_SIZE);
 
     if (in_aram) {
         bank_no = Player_Pallet_bank_ID[bank_idx];
@@ -1156,7 +1179,8 @@ extern int mPlib_Check_PlayerClothInAram(int idx) {
 static int Player_face_tex_bank_ID = -1;
 
 extern void mPlib_Object_Exchange_keep_new_PlayerFaceTex(GAME_PLAY* play) {
-    Player_face_tex_bank_ID = mPlib_Object_Exchange_keep_new(play, ACTOR_OBJ_BANK_52, 0, 0xE00, TRUE);
+    mPlib_resource_c resource = { NULL, 0, TRUE };
+    Player_face_tex_bank_ID = mPlib_Object_Exchange_keep_new(play, ACTOR_OBJ_BANK_52, resource, 0xE00);
 }
 
 static int Player_face_pallet_bank_ID[] = { -1, -1 };
@@ -1170,8 +1194,9 @@ static void mPlib_ByteSwapPlayerPalette(u16* pal) {
 #endif
 
 extern void mPlib_Object_Exchange_keep_new_PlayerFacePallet(GAME_PLAY* play, int bank, int bank_idx) {
+    mPlib_resource_c resource = { NULL, 0, TRUE };
     Player_face_pallet_bank_ID[bank_idx] =
-        bank + mPlib_Object_Exchange_keep_new(play, ACTOR_OBJ_BANK_52, 0, mNW_PALETTE_SIZE, TRUE);
+        bank + mPlib_Object_Exchange_keep_new(play, ACTOR_OBJ_BANK_52, resource, mNW_PALETTE_SIZE);
 }
 
 extern void mPlib_Object_Exchange_keep_Player_dt(GAME_PLAY* play) {
@@ -1234,17 +1259,16 @@ extern u16* mPlib_get_player_face_pallet_p(GAME* game) {
 
 extern void mPlib_change_player_cloth(GAME* game, u16 cloth_idx) {
     int idx = cloth_idx;
-    int in_aram = mPlib_Check_PlayerClothInAram(idx);
     Change_Player_bank_ID_Index();
 
     {
         u8* player_tex_p = mPlib_get_player_tex_p(game);
-        u32 player_tex_rom_p = mPlib_Get_PlayerTexRom_p(idx);
+        mPlib_resource_c player_tex = mPlib_Get_PlayerTexResource(idx);
 
-        if (in_aram) {
-            _JW_GetResourceAram(player_tex_rom_p, player_tex_p, mNW_DESIGN_TEX_SIZE);
+        if (player_tex.in_aram) {
+            _JW_GetResourceAram(player_tex.aram_addr, player_tex_p, mNW_DESIGN_TEX_SIZE);
         } else {
-            bcopy((u8*)player_tex_rom_p, player_tex_p, mNW_DESIGN_TEX_SIZE);
+            bcopy(player_tex.host_ptr, player_tex_p, mNW_DESIGN_TEX_SIZE);
         }
 
         DCStoreRangeNoSync(player_tex_p, mNW_DESIGN_TEX_SIZE);
@@ -1252,16 +1276,16 @@ extern void mPlib_change_player_cloth(GAME* game, u16 cloth_idx) {
 
     {
         u16* player_pallet_p = mPlib_get_player_pallet_p(game);
-        u32 player_pallet_rom_p = mPlib_Get_PlayerPalletRom_p(idx);
+        mPlib_resource_c player_pallet = mPlib_Get_PlayerPalletResource(idx);
 
-        if (in_aram) {
-            _JW_GetResourceAram(player_pallet_rom_p, (u8*)player_pallet_p, mNW_PALETTE_SIZE);
+        if (player_pallet.in_aram) {
+            _JW_GetResourceAram(player_pallet.aram_addr, (u8*)player_pallet_p, mNW_PALETTE_SIZE);
         } else {
-            bcopy((u16*)player_pallet_rom_p, player_pallet_p, mNW_PALETTE_SIZE);
+            bcopy(player_pallet.host_ptr, player_pallet_p, mNW_PALETTE_SIZE);
         }
 
 #ifdef TARGET_PC
-        if (in_aram) {
+        if (player_pallet.in_aram) {
             mPlib_ByteSwapPlayerPalette(player_pallet_p);
         }
 #endif
@@ -1358,16 +1382,16 @@ extern void mPlib_change_player_cloth_info_lv2(Private_c* priv, mActor_name_t it
 
 extern void mPlib_Load_PlayerTexAndPallet(void* tex_p, void* pal_p, int idx) {
     if (idx >= 0 && idx < (CLOTH_NUM + 1 + mPr_ORIGINAL_DESIGN_COUNT) && tex_p != NULL && pal_p != NULL) {
-        u32 tex_rom_p = mPlib_Get_PlayerTexRom_p(idx);
-        u32 pal_rom_p = mPlib_Get_PlayerPalletRom_p(idx);
-        int in_aram = mPlib_Check_PlayerClothInAram(idx);
+        mPlib_resource_c tex = mPlib_Get_PlayerTexResource(idx);
+        mPlib_resource_c pal = mPlib_Get_PlayerPalletResource(idx);
+        int in_aram = tex.in_aram;
 
         if (in_aram) {
-            _JW_GetResourceAram(tex_rom_p, (u8*)tex_p, mNW_DESIGN_TEX_SIZE);
-            _JW_GetResourceAram(pal_rom_p, (u8*)pal_p, mNW_PALETTE_SIZE);
+            _JW_GetResourceAram(tex.aram_addr, (u8*)tex_p, mNW_DESIGN_TEX_SIZE);
+            _JW_GetResourceAram(pal.aram_addr, (u8*)pal_p, mNW_PALETTE_SIZE);
         } else {
-            bcopy((u8*)tex_rom_p, tex_p, mNW_DESIGN_TEX_SIZE);
-            bcopy((u16*)pal_rom_p, pal_p, mNW_PALETTE_SIZE);
+            bcopy(tex.host_ptr, tex_p, mNW_DESIGN_TEX_SIZE);
+            bcopy(pal.host_ptr, pal_p, mNW_PALETTE_SIZE);
         }
 
 #ifdef TARGET_PC
@@ -1674,7 +1698,7 @@ extern void mPlib_request_main_demo_wait_from_submenu(ACTOR* speak_actor_p) {
     change_data_from_submenu_p->requested_index_pending = TRUE;
 
     req_demo_wait_p->umbrella_flag = FALSE;
-    req_demo_wait_p->label = (u32)speak_actor_p;
+    req_demo_wait_p->label = (runtime_id_t)speak_actor_p;
 
     if (speak_actor_p != NULL) {
         mPlib_Set_able_force_speak_label(speak_actor_p);
@@ -1699,7 +1723,7 @@ extern int mPlib_Check_able_force_speak_label(GAME* game, ACTOR* label) {
 
 extern void mPlib_Set_able_force_speak_label(ACTOR* label) {
     if (Common_Get(player_actor_exists)) {
-        GET_PLAYER_ACTOR_NOW()->able_force_speak_label = (u32)label;
+        GET_PLAYER_ACTOR_NOW()->able_force_speak_label = (runtime_id_t)label;
     }
 }
 
@@ -2624,7 +2648,7 @@ extern int mPlib_check_label_player_demo_wait(GAME* game, void* label) {
     if (mPlib_get_player_actor_main_index(game) == mPlayer_INDEX_DEMO_WAIT) {
         mPlayer_main_demo_wait_c* demo_wait_p = &GET_PLAYER_ACTOR_GAME(game)->main_data.demo_wait;
 
-        if (demo_wait_p->label == (u32)label) {
+        if (demo_wait_p->label == (runtime_id_t)label) {
             return TRUE;
         }
     }
@@ -2799,11 +2823,11 @@ extern int mPlib_Check_StopNet(xyz_t* pos_p) {
     return GET_PLAYER_ACTOR_NOW()->Check_StopNet_proc(GET_PLAYER_ACTOR_NOW_ACTOR(), pos_p);
 }
 
-extern u32 mPlib_Get_item_net_catch_label(void) {
+extern runtime_id_t mPlib_Get_item_net_catch_label(void) {
     return GET_PLAYER_ACTOR_NOW()->Get_item_net_catch_label_proc(GET_PLAYER_ACTOR_NOW_ACTOR());
 }
 
-extern int mPlib_Change_item_net_catch_label(u32 label, s8 type) {
+extern int mPlib_Change_item_net_catch_label(runtime_id_t label, s8 type) {
     return GET_PLAYER_ACTOR_NOW()->Change_item_net_catch_label_proc(GET_PLAYER_ACTOR_NOW_ACTOR(), label, type);
 }
 

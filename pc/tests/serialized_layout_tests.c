@@ -4,6 +4,7 @@
 #include "dolphin/dvd.h"
 #include "jaudio_NES/audiostruct.h"
 #include "m_common_data.h"
+#include "m_scene.h"
 
 _Static_assert(sizeof(DVDDriveInfo) == 32, "DVDDriveInfo layout changed");
 _Static_assert(sizeof(DVDDiskID) == 32, "DVDDiskID layout changed");
@@ -32,6 +33,12 @@ _Static_assert(offsetof(Save_t, time_delta) == 0x22528, "save time-delta offset 
 
 int main(void) {
     MemcardGameHeader_t header = {0};
+    Actor_data actor_data = {0};
+    Scene_Word_u scene_word = mSc_DATA_PLAYER(&actor_data);
+
+    if (scene_word.actor.data_p != &actor_data) {
+        return 1;
+    }
 
     Famicom_SetHasCommentImage(&header, TRUE);
     Famicom_SetCommentType(&header, MEMCARD_COMMENT_TYPE_COPY_ROM);

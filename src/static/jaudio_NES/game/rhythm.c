@@ -7,7 +7,7 @@ typedef struct NA_RHYTHM_BUFFER {
     /* 0x0 */ u8 state;
     /* 0x1 */ s8 current_subtrack;
     /* 0x2 */ u8 unk2[0x2];
-    /* 0x4 */ u32 current_buffer_id;
+    /* 0x4 */ runtime_id_t current_buffer_id;
     /* 0x8 */ s8 unk8;
     /* 0x9 */ s8 unk9;
     /* 0xA */ u8 unkA[0x2];
@@ -34,8 +34,8 @@ extern void Na_RhythmInit() {
         rhythm_buffer[i].current_subtrack = i;
     }
 
-    Nap_SetS32(NA_MAKE_COMMAND(228, 0, 0, 0), (s32)Na_GetRhythmSeNum);
-    Nap_SetS32(NA_MAKE_COMMAND(228, 0, 0, 1), (s32)Na_RhythmGrpProcess);
+    Nap_SetPointer(NA_MAKE_COMMAND(228, 0, 0, 0), Na_GetRhythmSeNum);
+    Nap_SetPointer(NA_MAKE_COMMAND(228, 0, 0, 1), Na_RhythmGrpProcess);
 }
 
 static NA_RHYTHM_BUFFER* rhythm_buffer_alloc() {
@@ -55,7 +55,7 @@ static NA_RHYTHM_BUFFER* rhythm_buffer_alloc() {
     return nullptr;
 }
 
-static NA_RHYTHM_BUFFER* get_rhythm_buffer(u32 idx) {
+static NA_RHYTHM_BUFFER* get_rhythm_buffer(runtime_id_t idx) {
     int i;
     NA_RHYTHM_BUFFER* buf;
 
@@ -70,7 +70,7 @@ static NA_RHYTHM_BUFFER* get_rhythm_buffer(u32 idx) {
     return nullptr;
 }
 
-extern s8 Na_GetRhythmSubTrack(u32 idx) {
+extern s8 Na_GetRhythmSubTrack(runtime_id_t idx) {
     NA_RHYTHM_BUFFER* buf;
 
     buf = get_rhythm_buffer(idx);
@@ -99,7 +99,7 @@ static void rhythm_stop(NA_RHYTHM_BUFFER* buffer) {
     }
 }
 
-extern void Na_RhythmStart(u32 idx, s8 arg1, s8 arg2) {
+extern void Na_RhythmStart(runtime_id_t idx, s8 arg1, s8 arg2) {
     NA_RHYTHM_BUFFER* buf;
 
     buf = get_rhythm_buffer(idx);
@@ -114,7 +114,7 @@ extern void Na_RhythmStart(u32 idx, s8 arg1, s8 arg2) {
     }
 }
 
-extern void Na_RhythmStop(u32 idx) {
+extern void Na_RhythmStop(runtime_id_t idx) {
     NA_RHYTHM_BUFFER* buf;
 
     buf = get_rhythm_buffer(idx);
@@ -143,7 +143,7 @@ static s16 Na_GetRhythmBeatType(void) {
     return rhythm_beat_type;
 }
 
-extern f32 Na_GetRhythmAnimCounter(u32 idx) {
+extern f32 Na_GetRhythmAnimCounter(runtime_id_t idx) {
     f32 f31 = 0.0f;
     NA_RHYTHM_BUFFER* buf = get_rhythm_buffer(idx);
     s16 r30;
@@ -186,7 +186,7 @@ extern f32 Na_GetRhythmAnimCounter(u32 idx) {
     return f31;
 }
 
-extern s8 Na_GetRhythmDelay(u32 idx) {
+extern s8 Na_GetRhythmDelay(runtime_id_t idx) {
     NA_RHYTHM_BUFFER* buf;
     s8 delay = 0;
 

@@ -87,7 +87,7 @@ extern bool ppuMapper5;
 extern uint8_t inValReads[8];
 
 /* Audio output to game engine */
-extern void AIInitDMA(uint32_t addr, uint32_t size);
+extern void AIInitDMA(void* addr, uint32_t size);
 
 /* ======================================================================
  * GL rendering state
@@ -205,7 +205,7 @@ static void fixnes_capture_audio(void) {
     }
 
     if (fixnes_audio_pos > 0) {
-        AIInitDMA((uint32_t)(uintptr_t)fixnes_audio_buf, fixnes_audio_pos * 4);
+        AIInitDMA(fixnes_audio_buf, fixnes_audio_pos * 4);
     }
 }
 

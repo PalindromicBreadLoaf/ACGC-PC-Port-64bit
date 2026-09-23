@@ -22,12 +22,13 @@ extern void DSPWaitFinish(void) {
     /* No hardware DSP — already done synchronously */
 }
 
-extern void DsetupTable(u32 arg0, u32 arg1, u32 arg2, u32 arg3, u32 arg4) {
+extern void DsetupTable(u32 arg0, dsp_cmd_addr_t arg1, dsp_cmd_addr_t arg2, dsp_cmd_addr_t arg3,
+                        dsp_cmd_addr_t arg4) {
     /* Channel table setup — no-op on PC, rspsim uses DSPchannel_ structs directly */
     (void)arg0; (void)arg1; (void)arg2; (void)arg3; (void)arg4;
 }
 
-extern void DsyncFrame(u32 subframes, u32 dspbuf_start, u32 dspbuf_end) {
+extern void DsyncFrame(u32 subframes, dsp_cmd_addr_t dspbuf_start, dsp_cmd_addr_t dspbuf_end) {
     /* On GC this sends commands to DSP to process subframes.
      * On PC, rspsim is called directly from UpdateDSP path.
      * Store buffer pointers for rspsim if needed. */
@@ -38,12 +39,12 @@ extern void DwaitFrame(void) {
     /* No-op on PC */
 }
 
-extern void DiplSec(u32 arg0) {
+extern void DiplSec(dsp_cmd_addr_t arg0) {
     /* IPL security — not needed on PC */
     (void)arg0;
 }
 
-extern void DagbSec(u32 arg0) {
+extern void DagbSec(dsp_cmd_addr_t arg0) {
     /* AGB security — not needed on PC */
     (void)arg0;
 }
@@ -89,7 +90,8 @@ extern void DSPWaitFinish() {
     } while ((DSPReadMailFromDSP() + 0x77780000) == 0x1357);
 }
 
-extern void DsetupTable(u32 arg0, u32 arg1, u32 arg2, u32 arg3, u32 arg4) {
+extern void DsetupTable(u32 arg0, dsp_cmd_addr_t arg1, dsp_cmd_addr_t arg2, dsp_cmd_addr_t arg3,
+                        dsp_cmd_addr_t arg4) {
     u32 commands[5];
 
     commands[0] = (arg0 & 0xFFFF) | 0x81000000;
@@ -102,7 +104,7 @@ extern void DsetupTable(u32 arg0, u32 arg1, u32 arg2, u32 arg3, u32 arg4) {
     DSPWaitFinish();
 }
 
-extern void DsyncFrame(u32 subframes, u32 dspbuf_start, u32 dspbuf_end){
+extern void DsyncFrame(u32 subframes, dsp_cmd_addr_t dspbuf_start, dsp_cmd_addr_t dspbuf_end){
     u32 commands[3];
 
     commands[0] = (subframes << 16 & 0xFF0000) | 0x82000000 | DSP_MIXERLEVEL;
@@ -121,7 +123,7 @@ extern void DwaitFrame(){
     DSPWaitFinish();
 }
 
-extern void DiplSec(u32 arg0){
+extern void DiplSec(dsp_cmd_addr_t arg0){
     u32 commands[2];
 
     commands[0] = 0x8B000008;
@@ -130,7 +132,7 @@ extern void DiplSec(u32 arg0){
     DSPWaitFinish();
 }
 
-extern void DagbSec(u32 arg0){
+extern void DagbSec(dsp_cmd_addr_t arg0){
     u32 commands[2];
 
     commands[0] = 0x8C000008;
@@ -140,4 +142,3 @@ extern void DagbSec(u32 arg0){
 }
 
 #endif /* TARGET_PC */
-

@@ -117,7 +117,7 @@ extern s32 Z_osRecvMesg(OSMesgQueue* mq, OSMesg* msg, s32 flags) {
 }
 
 extern s32 Z_osEPiStartDma(OSPiHandle* handler, OSIoMesg* msg, s32 dir) {
-    ARAMStartDMAmesg(1, (uintptr_t)msg->dramAddr, msg->devAddr, msg->size, 0, msg->hdr.retQueue);
+    ARAMStartDMAmesg(1, msg->dramAddr, msg->devAddr, msg->size, 0, msg->hdr.retQueue);
     return 0;
 }
 

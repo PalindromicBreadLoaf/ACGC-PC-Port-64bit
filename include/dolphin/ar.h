@@ -2,6 +2,9 @@
 #define _DOLPHIN_AR_H
 
 #include "types.h"
+#ifdef TARGET_PC
+#include "pc_portability.h"
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -14,15 +17,26 @@ typedef struct ARQRequest ARQRequest;
 typedef void (*ARCallback)(void);
 
 // ARQ callback function type.
+#ifdef TARGET_PC
+typedef uintptr_t ARQOwner;
+typedef void (*ARQCallback)(uintptr_t ptrToRequest);
+#else
+typedef u32 ARQOwner;
 typedef void (*ARQCallback)(u32 ptrToRequest);
+#endif
 
 struct ARQRequest {
 	ARQRequest* next;     // _00
-	u32 owner;            // _04
+	ARQOwner owner;       // _04
 	u32 type;             // _08
 	u32 priority;         // _0C
+#ifdef TARGET_PC
+	void* mramAddress;
+	aram_addr_t aramAddress;
+#else
 	u32 source;           // _10
 	u32 dest;             // _14
+#endif
 	u32 length;           // _18
 	ARQCallback callback; // _1C
 };
@@ -32,12 +46,24 @@ struct ARQRequest {
 /////////////// AR FUNCTIONS ///////////////
 // ARQ functions.
 void ARQInit();
-void ARQPostRequest(ARQRequest* task, u32 owner, u32 type, u32 priority, u32 source, u32 dest, u32 length, ARQCallback callback);
+#ifdef TARGET_PC
+void ARQPostRequest(ARQRequest* task, ARQOwner owner, u32 type, u32 priority, void* mram_addr,
+                    aram_addr_t aram_addr, u32 length, ARQCallback callback);
+#else
+void ARQPostRequest(ARQRequest* task, ARQOwner owner, u32 type, u32 priority, u32 source, u32 dest, u32 length,
+                    ARQCallback callback);
+#endif
 
 // AR functions.
 ARQCallback ARRegisterDMACallback(ARQCallback callback);
 u32 ARGetDMAStatus();
+#ifdef TARGET_PC
+void ARStartDMA(u32 type, void* mainmem_addr, aram_addr_t aram_addr, u32 length);
+BOOL pc_aram_transfer(u32 type, void* mainmem_addr, aram_addr_t aram_addr, u32 length);
+u8* pc_aram_get_base(void);
+#else
 void ARStartDMA(u32 type, u32 mainmem_addr, u32 aram_addr, u32 length);
+#endif
 u32 ARAlloc(u32 length);
 u32 ARInit(u32* stack_index_addr, u32 num_entries);
 u32 ARGetBaseAddress();
