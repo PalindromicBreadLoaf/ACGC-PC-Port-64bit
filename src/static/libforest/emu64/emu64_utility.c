@@ -5,51 +5,20 @@
 #include "MSL_C/w_math.h"
 
 #ifdef TARGET_PC
-#include "pc_pointer_token.h"
+#include "pc_emu64_address.h"
 
-static_assert(sizeof(void*) == sizeof(u32), "seg2k0 pointer resolution requires 32-bit pointers");
+uintptr_t emu64::seg2k0(u32 segadr) {
+    uintptr_t resolved;
+    pc_pointer_token_result result = pc_emu64_resolve_address(segadr, this->segments, &resolved);
 
-/* Executable image range from pc_main.c — BSS/data can collide with N64 segments */
-extern "C" unsigned int pc_image_base;
-extern "C" unsigned int pc_image_end;
-extern "C" int pc_gbi_unpack_runtime_ptr(unsigned int packed, uintptr_t* addr_out);
-
-u32 emu64::seg2k0(u32 segadr) {
-    uintptr_t runtime_ptr;
-    int token_result = pc_gbi_unpack_runtime_ptr(segadr, &runtime_ptr);
-
-    if (token_result == PC_POINTER_TOKEN_OK) {
-        return (u32)runtime_ptr;
-    }
-    if (token_result != PC_POINTER_TOKEN_NOT_TOKEN) {
+    if (result != PC_POINTER_TOKEN_OK) {
         this->Printf0("invalid GBI pointer token: %08x (%s)\n", segadr,
-                      pc_pointer_token_result_name((pc_pointer_token_result)token_result));
+                      pc_pointer_token_result_name(result));
         return 0;
     }
-
-    /* Addresses above the N64 segment range (upper nibble != 0) or below
-       the minimum segment address are definitely raw PC pointers. */
-    if ((segadr >> 28) != 0 || segadr < 0x03000000) {
-        return segadr;
+    if (resolved != (uintptr_t)segadr) {
+        this->resolved_addresses++;
     }
-
-    /* Check if address falls within the executable image (BSS/data/code). */
-    if (segadr >= pc_image_base && segadr < pc_image_end) {
-        return segadr;
-    }
-
-    u32 seg = (segadr >> 24) & 0xF;
-    u32 offset = segadr & 0xFFFFFF;
-
-    u32 base = this->segments[seg] & ~1u;
-
-    if (base == 0) {
-        return segadr;
-    }
-
-    /* Normal segment resolution path */
-    u32 resolved = base + offset;
-    this->resolved_addresses++;
     return resolved;
 }
 #else

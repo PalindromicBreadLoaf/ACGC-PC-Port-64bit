@@ -741,7 +741,11 @@ void emu64::printInfo() {
     // Display DL stack %d level.
     this->Printf0("DLスタック表示 %d level\n", this->DL_stack_level);
     for (i = 0; i < this->DL_stack_level; i++) {
+#ifdef TARGET_PC
+        this->Printf0("%d %p\n", i, (void*)this->DL_stack[i]);
+#else
         this->Printf0("%d %08x %08x\n", i, this->DL_stack[i], convert_partial_address(this->DL_stack[i]));
+#endif
     }
 
     // Display last 16 DLs.
@@ -758,7 +762,11 @@ void emu64::printInfo() {
     // Display segment table.
     this->Printf0("セグメントテーブル表示\n");
     for (i = 0; i < EMU64_NUM_SEGMENTS; i++) {
+#ifdef TARGET_PC
+        this->Printf0("%2d %p\n", i, (void*)this->segments[i]);
+#else
         this->Printf0("%2d %08x %08x\n", i, this->segments[i], convert_partial_address(this->segments[i]));
+#endif
     }
 }
 
@@ -3483,16 +3491,20 @@ void emu64::dl_G_DL(void) {
             }
 
             if (this->DL_stack_level < DL_MAX_STACK_LEVEL) {
+#ifdef TARGET_PC
+                this->DL_stack[this->DL_stack_level++] = this->gfx_p + 1;
+#else
                 this->DL_stack[this->DL_stack_level++] = (u32)(this->gfx_p + 1);
+#endif
             } else {
                 this->err_count++;
                 this->Printf0("*** DL stack overflow ***\n");
             }
 
-            this->gfx_p = (Gfx*)((int)this->work_ptr - sizeof(Gfx));
+            this->gfx_p = (Gfx*)((u8*)this->work_ptr - sizeof(Gfx));
             break;
         case G_DL_NOPUSH:
-            this->gfx_p = (Gfx*)((u32)this->work_ptr - sizeof(Gfx));
+            this->gfx_p = (Gfx*)((u8*)this->work_ptr - sizeof(Gfx));
             break;
         default:
             if (this->disable_polygons == false) {
@@ -3675,7 +3687,11 @@ void emu64::dl_G_SETTILE_DOLPHIN() {
     this->settilesize_dolphin_cmds[tile].isDolphin = 1;
 
     /* Set texture info for use in GC texture object initialization */
+#ifdef TARGET_PC
+    this->texture_info[tile].img_addr = (void*)this->now_setimg_addr;
+#else
     this->texture_info[tile].img_addr = (void*)this->now_setimg.setimg2.imgaddr;
+#endif
     this->texture_info[tile].format = this->now_setimg.setimg2.fmt;
     this->texture_info[tile].size = this->now_setimg.setimg2.siz;
     this->texture_info[tile].width = EXPAND_WIDTH(this->now_setimg.setimg2.wd);
@@ -3700,7 +3716,11 @@ void emu64::dl_G_LOADTILE() {
         return;
 
     /* Determine tmem base address */
+#ifdef TARGET_PC
+    uintptr_t dram = this->now_setimg_addr;
+#else
     u32 dram = this->now_setimg.setimg2.imgaddr;
+#endif
     dram += ((loadtile.tl / 4) * EXPAND_WIDTH(this->now_setimg.setimg2.wd) + (loadtile.sl / 4)
              << this->now_setimg.setimg2.siz) /
             2;
@@ -3728,7 +3748,11 @@ void emu64::dl_G_LOADTILE() {
 void emu64::dl_G_LOADBLOCK() {
     int tmem_idx;
     Gloadblock* loadblock = (Gloadblock*)this->gfx_p;
+#ifdef TARGET_PC
+    uintptr_t addr;
+#else
     u32 addr;
+#endif
     int i;
 
 #ifdef EMU64_DEBUG
@@ -3744,7 +3768,11 @@ void emu64::dl_G_LOADBLOCK() {
         return; /* Does not support LOAD commands */
 
     tmem_idx = this->settile_cmds[loadblock->tile].tmem / 4;
+#ifdef TARGET_PC
+    addr = this->now_setimg_addr;
+#else
     addr = this->now_setimg.setimg2.imgaddr;
+#endif
     for (i = tmem_idx; i < tmem_idx + (loadblock->sh + 1) / 16; i++) {
         tmem_map[i].addr = (void*)addr;
         tmem_map[i].loadblock = *loadblock;
@@ -3891,10 +3919,18 @@ void emu64::dl_G_LOADTLUT() {
         if (this->disable_polygons == false) {
             u16 count = ((loadtlut->words.w1 >> 14) & 0x3FF) + 1;
             void* tlut;
+#ifdef TARGET_PC
+            uintptr_t addr = this->now_setimg_addr;
+#else
             u32 addr = this->now_setimg.setimg2.imgaddr;
+#endif
             u32 tlut_name = (settile_p->tmem / 16) & 0xF;
 
+#ifdef TARGET_PC
+            if (addr == (uintptr_t)this->tlut_addresses[tlut_name]) {
+#else
             if (addr == (u32)this->tlut_addresses[tlut_name]) {
+#endif
                 /* Translation: ### Same TLUT address %08x %d */
                 EMU64_INFOF("### 同じTLUTアドレスです %08x %d\n", addr, tlut_name);
 #ifdef TARGET_PC
@@ -4294,7 +4330,11 @@ void emu64::dl_G_SETTIMG() {
 #endif
 
     this->now_setimg.setimg2 = *setimg2;
-    this->now_setimg.setimg2.imgaddr = (u32)this->seg2k0(setimg2->imgaddr);
+#ifdef TARGET_PC
+    this->now_setimg_addr = this->seg2k0(setimg2->imgaddr);
+#else
+    this->now_setimg.setimg2.imgaddr = this->seg2k0(setimg2->imgaddr);
+#endif
 }
 
 void emu64::dl_G_SETENVCOLOR() {
@@ -5318,7 +5358,7 @@ void emu64::dl_G_BRANCH_Z() {
     EMU64_WARNF("gsSPBranchLessZraw(%s, %d, 0x%08x),", this->segchk(this->rdpHalf_1), (this->gfx.words.w0 / 2) & 0x7FF,
                 this->gfx.words.w1);
 
-    this->gfx_p = (Gfx*)((int)this->work_ptr - sizeof(Gfx));
+    this->gfx_p = (Gfx*)((u8*)this->work_ptr - sizeof(Gfx));
     /* Translation: gsSPBranchLessZraw isn't implemented yet */
     this->Printf0("gsSPBranchLessZrawはまだインプリメントされていません\n");
 }
@@ -5445,8 +5485,22 @@ void emu64::dl_G_MOVEWORD() {
             u32 segment = moveword->offset / 4;
             EMU64_WARNF("gsSPSegmentA(%d, 0x%08x),", segment, moveword->data);
 #ifdef TARGET_PC
-            /* On PC, store address directly (no GC physical address mapping) */
-            this->segments[segment] = moveword->data;
+            uintptr_t base;
+            pc_pointer_token_result result;
+
+            if (segment >= EMU64_NUM_SEGMENTS) {
+                this->Printf0("invalid GBI segment number: %u\n", segment);
+                this->err_count++;
+                break;
+            }
+            result = pc_emu64_resolve_address(moveword->data, nullptr, &base);
+            if (result != PC_POINTER_TOKEN_OK) {
+                this->Printf0("invalid GBI segment base: %08x (%s)\n", moveword->data,
+                              pc_pointer_token_result_name(result));
+                this->err_count++;
+                break;
+            }
+            this->segments[segment] = base;
 #else
             this->segments[segment] = (0x80000000 + (moveword->data & 0x0FFFFFFF));
             if (segment >= EMU64_NUM_SEGMENTS ||

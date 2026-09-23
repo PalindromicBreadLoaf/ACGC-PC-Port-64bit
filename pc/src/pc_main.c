@@ -36,10 +36,6 @@ int           g_pc_window_w = PC_SCREEN_WIDTH;
 int           g_pc_window_h = PC_SCREEN_HEIGHT;
 int           g_pc_widescreen_stretch = 0;
 
-/* exe image range -- used by seg2k0 to distinguish pointers from segment addresses */
-unsigned int pc_image_base = 0;
-unsigned int pc_image_end  = 0;
-
 void pc_platform_init(void) {
 #ifdef _WIN32
     SetProcessDPIAware();
@@ -345,39 +341,6 @@ int main(int argc, char* argv[]) {
         setvbuf(stdout, NULL, _IONBF, 0);
         setvbuf(stderr, NULL, _IONBF, 0);
     }
-
-    /* exe image range for seg2k0 — BSS can overlap N64 segment addresses */
-#ifdef _WIN32
-    {
-        HMODULE exe = GetModuleHandle(NULL);
-        IMAGE_DOS_HEADER* dos = (IMAGE_DOS_HEADER*)exe;
-        IMAGE_NT_HEADERS* nt = (IMAGE_NT_HEADERS*)((char*)exe + dos->e_lfanew);
-        pc_image_base = (unsigned int)(uintptr_t)exe;
-        pc_image_end = pc_image_base + nt->OptionalHeader.SizeOfImage;
-    }
-#else
-    {
-        Dl_info dl;
-        if (dladdr((void*)main, &dl) && dl.dli_fbase) {
-            pc_image_base = (unsigned int)(uintptr_t)dl.dli_fbase;
-            Elf32_Ehdr* ehdr = (Elf32_Ehdr*)dl.dli_fbase;
-            Elf32_Phdr* phdr = (Elf32_Phdr*)((char*)dl.dli_fbase + ehdr->e_phoff);
-            unsigned int max_end = 0;
-            for (int i = 0; i < ehdr->e_phnum; i++) {
-                if (phdr[i].p_type == PT_LOAD) {
-                    unsigned int seg_end = phdr[i].p_vaddr + phdr[i].p_memsz;
-                    if (seg_end > max_end) max_end = seg_end;
-                }
-            }
-            /* ET_EXEC: p_vaddr is absolute. ET_DYN (PIE): relative to load address. */
-            if (ehdr->e_type == ET_DYN) {
-                pc_image_end = pc_image_base + max_end;
-            } else {
-                pc_image_end = max_end;
-            }
-        }
-    }
-#endif
 
     SDL_SetMainReady();
     pc_settings_load();

@@ -2,6 +2,7 @@ add_executable(pc_portability_tests
     portability_tests.c
     ../src/pc_gbi_runtime.c
     ../src/pc_pointer_token.c
+    ../src/pc_emu64_address.c
     ../../src/TwoHeadArena.c
     ../../src/gamealloc.c
 )

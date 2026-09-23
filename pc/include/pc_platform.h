@@ -2,11 +2,7 @@
 #ifndef PC_PLATFORM_H
 #define PC_PLATFORM_H
 
-/* 32-bit required: decomp code (JSystem, emu64) casts pointers to u32 */
 #include <stdint.h>
-#if 0
-#error "This project must be compiled as 32-bit (pointer size != 4 bytes)"
-#endif
 
 #define SDL_MAIN_HANDLED
 #include <SDL.h>
@@ -53,10 +49,6 @@
 #include <windows.h>
 #undef near
 #undef far
-#else
-#include <sys/mman.h>
-#include <dlfcn.h>
-#include <elf.h>
 #endif
 
 #ifdef __cplusplus
@@ -100,10 +92,6 @@ void pc_platform_init(void);
 void pc_platform_shutdown(void);
 void pc_platform_swap_buffers(void);
 int  pc_platform_poll_events(void);
-
-/* EXE image range for seg2k0 pointer disambiguation (vs N64 segment addresses) */
-extern unsigned int pc_image_base;
-extern unsigned int pc_image_end;
 
 /* --- Model viewer --- */
 extern int g_pc_model_viewer;

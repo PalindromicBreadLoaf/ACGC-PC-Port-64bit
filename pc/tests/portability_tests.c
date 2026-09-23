@@ -13,6 +13,7 @@
 #include "dolphin/gx/GXStruct.h"
 #include "dolphin/mtx.h"
 #include "pc_portability.h"
+#include "pc_emu64_address.h"
 #include "pc_pointer_token.h"
 
 #define CHECK(condition)                                                                                               \
@@ -180,6 +181,42 @@ static int test_gbi_pointer_tokens(void) {
     return 0;
 }
 
+static int test_emu64_address_resolution(void) {
+    uintptr_t segments[PC_EMU64_SEGMENT_COUNT] = {0u};
+    uintptr_t resolved = 0u;
+    uintptr_t pointer = UINT64_C(0x1234567887654321);
+    uint32_t token;
+    uint32_t segment;
+
+    pc_pointer_token_reset(PC_POINTER_TOKEN_DOMAIN_GBI);
+    CHECK(pc_pointer_token_pack(PC_POINTER_TOKEN_DOMAIN_GBI, pointer, &token) == PC_POINTER_TOKEN_OK);
+    CHECK(pc_emu64_resolve_address(token, segments, &resolved) == PC_POINTER_TOKEN_OK);
+    CHECK(resolved == pointer);
+
+    for (segment = PC_EMU64_FIRST_SEGMENT; segment < PC_EMU64_SEGMENT_COUNT; segment++) {
+        segments[segment] = pointer + (uintptr_t)segment * UINT32_C(0x01000000);
+        CHECK(pc_emu64_resolve_address((segment << 24), segments, &resolved) == PC_POINTER_TOKEN_OK);
+        CHECK(resolved == segments[segment]);
+        CHECK(pc_emu64_resolve_address((segment << 24) | UINT32_C(0x00ffffff), segments, &resolved) ==
+              PC_POINTER_TOKEN_OK);
+        CHECK(resolved == segments[segment] + UINT32_C(0x00ffffff));
+    }
+
+    CHECK(pc_emu64_resolve_address(UINT32_C(0x02ffffff), segments, &resolved) == PC_POINTER_TOKEN_OK);
+    CHECK(resolved == UINT32_C(0x02ffffff));
+    segments[3] = 0u;
+    CHECK(pc_emu64_resolve_address(UINT32_C(0x03123456), segments, &resolved) == PC_POINTER_TOKEN_OK);
+    CHECK(resolved == UINT32_C(0x03123456));
+    segments[3] = UINTPTR_MAX;
+    CHECK(pc_emu64_resolve_address(UINT32_C(0x03000001), segments, &resolved) ==
+          PC_POINTER_TOKEN_INVALID_DOMAIN);
+
+    CHECK(pc_pointer_token_release(PC_POINTER_TOKEN_DOMAIN_GBI, token) == PC_POINTER_TOKEN_OK);
+    CHECK(pc_emu64_resolve_address(token, segments, &resolved) == PC_POINTER_TOKEN_STALE);
+    pc_pointer_token_reset(PC_POINTER_TOKEN_DOMAIN_GBI);
+    return 0;
+}
+
 #if UINTPTR_MAX > UINT32_MAX
 static Vtx static_vertices[1];
 static Mtx static_matrix;
@@ -333,6 +370,7 @@ int main(void) {
     CHECK(test_pointer_tokens() == 0);
     CHECK(test_pointer_token_exhaustion() == 0);
     CHECK(test_gbi_pointer_tokens() == 0);
+    CHECK(test_emu64_address_resolution() == 0);
     CHECK(test_static_gbi_relocations() == 0);
     CHECK(test_two_head_arena() == 0);
     CHECK(test_gamealloc() == 0);
