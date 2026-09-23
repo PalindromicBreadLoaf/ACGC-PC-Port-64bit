@@ -155,3 +155,21 @@ target_compile_options(pc_aram_tests PRIVATE
 )
 
 add_test(NAME pc_aram COMMAND pc_aram_tests)
+
+add_executable(pc_rarc_tests
+    rarc_tests.c
+    ../src/pc_rarc.c
+)
+
+target_include_directories(pc_rarc_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+)
+
+target_compile_options(pc_rarc_tests PRIVATE
+    -Wall
+    -Wextra
+    -Werror
+    -Wconversion
+)
+
+add_test(NAME pc_rarc COMMAND pc_rarc_tests)
