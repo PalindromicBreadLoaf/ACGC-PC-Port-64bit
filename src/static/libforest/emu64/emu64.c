@@ -5767,6 +5767,16 @@ u32 emu64::emu64_taskstart_r(Gfx* dl_p) {
     this->end_dl = false;
 
     while (!this->end_dl && !FrameCansel) {
+#if defined(TARGET_PC) && UINTPTR_MAX > UINT32_MAX
+        {
+            int relocation_result = pc_gbi_relocate_static_command(this->gfx_p);
+            if (relocation_result != PC_POINTER_TOKEN_OK && relocation_result != PC_POINTER_TOKEN_NOT_TOKEN) {
+                this->Printf0("invalid static GBI relocation: %s\n",
+                              pc_pointer_token_result_name((pc_pointer_token_result)relocation_result));
+                break;
+            }
+        }
+#endif
         this->cmds_processed++;
         EMU64_INFOF("%08x:", this->gfx_p);
         this->gfx = *this->gfx_p;

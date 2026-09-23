@@ -9,7 +9,7 @@ extern "C" {
 
 #include "types.h"
 
-#ifndef _GBI_STATIC_PTR
+#ifndef _GBI_STATIC_COMMAND
 #ifdef TARGET_PC
 #ifndef _GBI_STATIC_ASSERT
 #ifdef __cplusplus
@@ -27,14 +27,25 @@ _GBI_STATIC_ASSERT(sizeof(void*) == sizeof(unsigned int), "GBI pointer packing r
 
 unsigned int pc_gbi_pack_runtime_ptr(uintptr_t addr, int is_ptr, const char* expr, const char* file, int line);
 int pc_gbi_unpack_runtime_ptr(unsigned int packed, uintptr_t* addr_out);
+int pc_gbi_relocate_static_command(void* command);
 #endif
 
-#define _GBI_STATIC_PTR(s) (unsigned int)(uintptr_t)(s)
+#if UINTPTR_MAX > UINT32_MAX
+#define _GBI_STATIC_RELOC_POINTER UINT32_C(0xfc000000)
+#define _GBI_STATIC_RELOC_VALUE UINT32_C(0xfc000001)
+#define _GBI_STATIC_RELOC_KIND(s) \
+    (__builtin_classify_type(s) == 5 || __builtin_classify_type(s) == 14 ? \
+         _GBI_STATIC_RELOC_POINTER : _GBI_STATIC_RELOC_VALUE)
+#define _GBI_STATIC_COMMAND(w0, s) \
+    {{ (w0), _GBI_STATIC_RELOC_KIND(s) }}, { .host_addr = (uintptr_t)(s) }
+#else
+#define _GBI_STATIC_COMMAND(w0, s) {{ (w0), (unsigned int)(s) }}
+#endif
 #define _GBI_IS_RUNTIME_PTR_EXPR(s) (__builtin_classify_type(s) == 5 || __builtin_classify_type(s) == 14)
 #define _GBI_RUNTIME_PTR(s) \
     pc_gbi_pack_runtime_ptr((uintptr_t)(s), _GBI_IS_RUNTIME_PTR_EXPR(s), #s, __FILE__, __LINE__)
 #else
-#define _GBI_STATIC_PTR(s) (unsigned int)(s)
+#define _GBI_STATIC_COMMAND(w0, s) {{ (w0), (unsigned int)(s) }}
 #define _GBI_RUNTIME_PTR(s) (unsigned int)(s)
 #endif
 #endif
@@ -1104,15 +1115,14 @@ do { \
 } while (0)
 
 #define gsDPLoadTLUT_Dolphin(name, count, unk, addr) \
-{{ \
-    _SHIFTL(G_LOADTLUT, 24, 8) | _SHIFTL(G_TLUT_DOLPHIN, 22, 2) | _SHIFTL(name, 16, 4) | _SHIFTL(unk, 14, 2) | _SHIFTL(count, 0, 14), _GBI_STATIC_PTR(addr) \
-}}
+_GBI_STATIC_COMMAND( \
+    _SHIFTL(G_LOADTLUT, 24, 8) | _SHIFTL(G_TLUT_DOLPHIN, 22, 2) | _SHIFTL(name, 16, 4) | \
+        _SHIFTL(unk, 14, 2) | _SHIFTL(count, 0, 14), addr)
 
 #define gsDPSetTextureImage_Dolphin(fmt, siz, w, h, img) \
-{{ \
+_GBI_STATIC_COMMAND( \
     _SHIFTL(G_SETTIMG, 24, 8) | _SHIFTL(fmt, 21, 3) | _SHIFTL(siz, 19, 2) | _SHIFTL(1, 18, 1) | \
-        _SHIFTL((h/4)-1, 10, 8) | _SHIFTL((w-1), 0, 10), _GBI_STATIC_PTR(img) \
-}}
+        _SHIFTL((h/4)-1, 10, 8) | _SHIFTL((w-1), 0, 10), img)
 
 #define gsDPSetTile_Dolphin(d_fmt, tile, tlut_name, wrap_s, wrap_t, shift_s, shift_t) \
 {{ \

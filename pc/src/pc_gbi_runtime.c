@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "pc_pointer_token.h"
 
@@ -30,4 +31,37 @@ unsigned int pc_gbi_pack_runtime_ptr(uintptr_t addr, int is_ptr, const char* exp
 
 int pc_gbi_unpack_runtime_ptr(unsigned int packed, uintptr_t* addr_out) {
     return (int)pc_pointer_token_resolve(PC_POINTER_TOKEN_DOMAIN_GBI, packed, addr_out);
+}
+
+int pc_gbi_relocate_static_command(void* command) {
+    uint32_t* words = command;
+    uintptr_t value;
+    uint32_t packed;
+    pc_pointer_token_result result;
+
+    if (command == NULL) {
+        return (int)PC_POINTER_TOKEN_INVALID_DOMAIN;
+    }
+    if (words[1] != UINT32_C(0xfc000000) && words[1] != UINT32_C(0xfc000001)) {
+        return (int)PC_POINTER_TOKEN_NOT_TOKEN;
+    }
+
+    memcpy(&value, words + 2, sizeof(value));
+    if (words[1] == UINT32_C(0xfc000000)) {
+        result = pc_pointer_token_pack(PC_POINTER_TOKEN_DOMAIN_GBI, value, &packed);
+    } else if (value > UINT32_MAX || pc_pointer_token_is_token((uint32_t)value)) {
+        result = PC_POINTER_TOKEN_INVALID_DOMAIN;
+    } else {
+        packed = (uint32_t)value;
+        result = PC_POINTER_TOKEN_OK;
+    }
+
+    if (result != PC_POINTER_TOKEN_OK) {
+        return (int)result;
+    }
+
+    words[1] = packed;
+    words[2] = 0u;
+    words[3] = 0u;
+    return (int)PC_POINTER_TOKEN_OK;
 }

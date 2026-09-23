@@ -8,6 +8,7 @@
 #include "PR/ultratypes.h"
 #include "TwoHeadArena.h"
 #include "gamealloc.h"
+#include "libforest/gbi_extensions.h"
 #include "dolphin/card.h"
 #include "dolphin/gx/GXStruct.h"
 #include "dolphin/mtx.h"
@@ -179,6 +180,53 @@ static int test_gbi_pointer_tokens(void) {
     return 0;
 }
 
+#if UINTPTR_MAX > UINT32_MAX
+static Vtx static_vertices[1];
+static Mtx static_matrix;
+static uint8_t static_texture[16];
+static Gfx static_nested_dl[] = { gsSPEndDisplayList() };
+static Gfx static_relocation_dl[] = {
+    gsSPVertex(static_vertices, 1, 0),
+    gsSPMatrix(&static_matrix, G_MTX_MODELVIEW | G_MTX_LOAD | G_MTX_NOPUSH),
+    gsSPDisplayList(static_nested_dl),
+    gsSPSegment(3, UINT32_C(0x00123000)),
+    gsDPSetTextureImage_Dolphin(G_IM_FMT_RGBA, G_IM_SIZ_16b, 2, 4, static_texture),
+    gsSPEndDisplayList()
+};
+
+static int check_static_relocation(size_t command_index, uintptr_t expected) {
+    uintptr_t resolved = 0u;
+
+    CHECK(pc_gbi_relocate_static_command(&static_relocation_dl[command_index]) == PC_POINTER_TOKEN_OK);
+    CHECK(pc_gbi_unpack_runtime_ptr(static_relocation_dl[command_index].words.w1, &resolved) ==
+          PC_POINTER_TOKEN_OK);
+    CHECK(resolved == expected);
+    CHECK(static_relocation_dl[command_index + 1u].words.w0 == 0u);
+    CHECK(static_relocation_dl[command_index + 1u].words.w1 == 0u);
+    return 0;
+}
+
+static int test_static_gbi_relocations(void) {
+    pc_pointer_token_reset(PC_POINTER_TOKEN_DOMAIN_GBI);
+    CHECK(sizeof(static_relocation_dl) / sizeof(static_relocation_dl[0]) == 11u);
+    CHECK(check_static_relocation(0u, (uintptr_t)static_vertices) == 0);
+    CHECK(check_static_relocation(2u, (uintptr_t)&static_matrix) == 0);
+    CHECK(check_static_relocation(4u, (uintptr_t)static_nested_dl) == 0);
+    CHECK(pc_gbi_relocate_static_command(&static_relocation_dl[6]) == PC_POINTER_TOKEN_OK);
+    CHECK(static_relocation_dl[6].words.w1 == UINT32_C(0x00123000));
+    CHECK(static_relocation_dl[7].words.w0 == 0u);
+    CHECK(static_relocation_dl[7].words.w1 == 0u);
+    CHECK(check_static_relocation(8u, (uintptr_t)static_texture) == 0);
+    CHECK(pc_gbi_relocate_static_command(&static_relocation_dl[10]) == PC_POINTER_TOKEN_NOT_TOKEN);
+    pc_pointer_token_reset(PC_POINTER_TOKEN_DOMAIN_GBI);
+    return 0;
+}
+#else
+static int test_static_gbi_relocations(void) {
+    return 0;
+}
+#endif
+
 static uintptr_t align_down(uintptr_t value, uintptr_t alignment) {
     return value & ~(alignment - 1u);
 }
@@ -285,6 +333,7 @@ int main(void) {
     CHECK(test_pointer_tokens() == 0);
     CHECK(test_pointer_token_exhaustion() == 0);
     CHECK(test_gbi_pointer_tokens() == 0);
+    CHECK(test_static_gbi_relocations() == 0);
     CHECK(test_two_head_arena() == 0);
     CHECK(test_gamealloc() == 0);
     return 0;

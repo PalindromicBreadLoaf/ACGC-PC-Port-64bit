@@ -42,15 +42,22 @@ extern "C" {
 #endif
 unsigned int pc_gbi_pack_runtime_ptr(uintptr_t addr, int is_ptr, const char* expr, const char* file, int line);
 int pc_gbi_unpack_runtime_ptr(unsigned int packed, uintptr_t* addr_out);
+int pc_gbi_relocate_static_command(void* command);
 #ifdef __cplusplus
 }
 #endif
 #endif
 
-/* GCC GNU extension: pointer-to-integer cast in static initializers.
-   Safe on 32-bit where sizeof(void*) == sizeof(unsigned int). */
-#ifndef _GBI_STATIC_PTR
-#define _GBI_STATIC_PTR(s) (unsigned int)(uintptr_t)(s)
+#if UINTPTR_MAX > UINT32_MAX
+#define _GBI_STATIC_RELOC_POINTER UINT32_C(0xfc000000)
+#define _GBI_STATIC_RELOC_VALUE UINT32_C(0xfc000001)
+#define _GBI_STATIC_RELOC_KIND(s) \
+    (__builtin_classify_type(s) == 5 || __builtin_classify_type(s) == 14 ? \
+         _GBI_STATIC_RELOC_POINTER : _GBI_STATIC_RELOC_VALUE)
+#define _GBI_STATIC_COMMAND(w0, s) \
+    {{ (w0), _GBI_STATIC_RELOC_KIND(s) }}, { .host_addr = (uintptr_t)(s) }
+#else
+#define _GBI_STATIC_COMMAND(w0, s) {{ (w0), (unsigned int)(s) }}
 #endif
 /* Runtime display-list commands encode real PC pointers as opaque handles.
    N64 segmented addresses are integer expressions and are left unchanged. */
@@ -60,9 +67,7 @@ int pc_gbi_unpack_runtime_ptr(unsigned int packed, uintptr_t* addr_out);
     pc_gbi_pack_runtime_ptr((uintptr_t)(s), _GBI_IS_RUNTIME_PTR_EXPR(s), #s, __FILE__, __LINE__)
 #endif
 #else
-#ifndef _GBI_STATIC_PTR
-#define _GBI_STATIC_PTR(s) (unsigned int)(s)
-#endif
+#define _GBI_STATIC_COMMAND(w0, s) {{ (w0), (unsigned int)(s) }}
 #ifndef _GBI_RUNTIME_PTR
 #define _GBI_RUNTIME_PTR(s) (unsigned int)(s)
 #endif
@@ -1915,6 +1920,9 @@ typedef union {
 	Gloadtile	loadtile;	/* use for loadblock also, th is dxt */
 	Gsettilesize	settilesize;
 	Gloadtlut	loadtlut;
+#if defined(TARGET_PC) && UINTPTR_MAX > UINT32_MAX
+        uintptr_t       host_addr;
+#endif
         long long int	force_structure_alignment;
 } Gfx;
 
@@ -1946,10 +1954,8 @@ _GBI_STATIC_ASSERT(sizeof(Gfx) == 8, "Gfx must remain 8 bytes");
 	_g->words.w1 = _GBI_RUNTIME_PTR(s);				\
 }
 
-#define	gsDma0p(c, s, l)						\
-{{									\
-	_SHIFTL((c), 24, 8) | _SHIFTL((l), 0, 24), _GBI_STATIC_PTR(s)	\
-}}
+#define	gsDma0p(c, s, l) \
+        _GBI_STATIC_COMMAND(_SHIFTL((c), 24, 8) | _SHIFTL((l), 0, 24), s)
 
 #define	gDma1p(pkt, c, s, l, p)						\
 {									\
@@ -1960,12 +1966,8 @@ _GBI_STATIC_ASSERT(sizeof(Gfx) == 8, "Gfx must remain 8 bytes");
 	_g->words.w1 = _GBI_RUNTIME_PTR(s);				\
 }
 
-#define	gsDma1p(c, s, l, p)						\
-{{									\
-	(_SHIFTL((c), 24, 8) | _SHIFTL((p), 16, 8) | 			\
-	 _SHIFTL((l), 0, 16)), 						\
-        _GBI_STATIC_PTR(s)						\
-}}
+#define	gsDma1p(c, s, l, p) \
+        _GBI_STATIC_COMMAND((_SHIFTL((c), 24, 8) | _SHIFTL((p), 16, 8) | _SHIFTL((l), 0, 16)), s)
 
 #define	gDma2p(pkt, c, adrs, len, idx, ofs)				\
 {									\
@@ -1974,15 +1976,12 @@ _GBI_STATIC_ASSERT(sizeof(Gfx) == 8, "Gfx must remain 8 bytes");
 			_SHIFTL((ofs)/8,8,8)|_SHIFTL((idx),0,8));	\
 	_g->words.w1 = _GBI_RUNTIME_PTR(adrs);				\
 }
-#define	gsDma2p(c, adrs, len, idx, ofs)					\
-{{									\
-	(_SHIFTL((c),24,8)|_SHIFTL(((len)-1)/8,19,5)|			\
-	 _SHIFTL((ofs)/8,8,8)|_SHIFTL((idx),0,8)),			\
-        _GBI_STATIC_PTR(adrs)						\
-}}
+#define	gsDma2p(c, adrs, len, idx, ofs) \
+        _GBI_STATIC_COMMAND((_SHIFTL((c),24,8)|_SHIFTL(((len)-1)/8,19,5)| \
+                             _SHIFTL((ofs)/8,8,8)|_SHIFTL((idx),0,8)), adrs)
 
 #define	gSPNoOp(pkt)		gDma0p(pkt, G_SPNOOP, 0, 0)
-#define	gsSPNoOp()		gsDma0p(G_SPNOOP, 0, 0)
+#define	gsSPNoOp()		{{ _SHIFTL(G_SPNOOP, 24, 8), 0 }}
 
 #ifdef	F3DEX_GBI_2
 # define	gSPMatrix(pkt, m, p)	\
@@ -2011,11 +2010,8 @@ _GBI_STATIC_ASSERT(sizeof(Gfx) == 8, "Gfx must remain 8 bytes");
 	  _SHIFTL(G_VTX,24,8)|_SHIFTL((n),12,8)|_SHIFTL((v0)+(n),1,7);	\
 	_g->words.w1 = _GBI_RUNTIME_PTR(v);				\
 }
-# define	gsSPVertex(v, n, v0)					\
-{{									\
-	(_SHIFTL(G_VTX,24,8)|_SHIFTL((n),12,8)|_SHIFTL((v0)+(n),1,7)),	\
-        _GBI_STATIC_PTR(v)						\
-}}
+# define	gsSPVertex(v, n, v0) \
+        _GBI_STATIC_COMMAND((_SHIFTL(G_VTX,24,8)|_SHIFTL((n),12,8)|_SHIFTL((v0)+(n),1,7)), v)
 #elif	(defined(F3DEX_GBI)||defined(F3DLP_GBI))
 /*
  * F3DEX_GBI: G_VTX GBI format was changed to support 64 vertice.
@@ -2133,8 +2129,12 @@ _GBI_STATIC_ASSERT(sizeof(Gfx) == 8, "Gfx must remain 8 bytes");
 #ifdef	F3DEX_GBI_2
 #define gMoveWd(pkt, index, offset, data)				\
 	gDma1p((pkt), G_MOVEWORD, data, offset, index)
-#define gsMoveWd(    index, offset, data)				\
-	gsDma1p(      G_MOVEWORD, data, offset, index)
+#define gsMoveWd(index, offset, data)                                    \
+{{                                                                      \
+        (_SHIFTL(G_MOVEWORD, 24, 8) | _SHIFTL((index), 16, 8) |         \
+         _SHIFTL((offset), 0, 16)),                                     \
+        (unsigned int)(data)                                            \
+}}
 #else	/* F3DEX_GBI_2 */
 #define gMoveWd(pkt, index, offset, data)				\
 	gImmp21((pkt), G_MOVEWORD, offset, index, data)
@@ -2425,8 +2425,15 @@ _GBI_STATIC_ASSERT(sizeof(Gfx) == 8, "Gfx must remain 8 bytes");
 
 #define gSPSegment(pkt, segment, base)					\
 	gMoveWd(pkt, G_MW_SEGMENT, (segment)*4, _GBI_RUNTIME_PTR(base))
-#define gsSPSegment(segment, base)					\
-	gsMoveWd(    G_MW_SEGMENT, (segment)*4, base)
+#ifdef TARGET_PC
+#define gsSPSegment(segment, base)                                       \
+        _GBI_STATIC_COMMAND((_SHIFTL(G_MOVEWORD, 24, 8) |                \
+                             _SHIFTL(G_MW_SEGMENT, 16, 8) |              \
+                             _SHIFTL((segment)*4, 0, 16)), base)
+#else
+#define gsSPSegment(segment, base)                                       \
+        gsMoveWd(G_MW_SEGMENT, (segment)*4, base)
+#endif
 
 /*
  * Clipping Macros
@@ -2574,8 +2581,7 @@ _GBI_STATIC_ASSERT(sizeof(Gfx) == 8, "Gfx must remain 8 bytes");
 }
 
 #define	gsSPBranchLessZrg(dl, vtx, zval, near, far, flag, zmin, zmax)	      \
-{{	_SHIFTL(G_RDPHALF_1,24,8),					      \
-	_GBI_STATIC_PTR(dl),						}},    \
+_GBI_STATIC_COMMAND(_SHIFTL(G_RDPHALF_1,24,8), dl),                        \
 {{	_SHIFTL(G_BRANCH_Z,24,8)|_SHIFTL((vtx)*5,12,12)|_SHIFTL((vtx)*2,0,12),\
 	G_DEPTOZSrg(zval, near, far, flag, zmin, zmax),			}}
 
@@ -2603,10 +2609,9 @@ _GBI_STATIC_ASSERT(sizeof(Gfx) == 8, "Gfx must remain 8 bytes");
 }
 
 #define	gsSPBranchLessZraw(dl, vtx, zval)				\
-{{	_SHIFTL(G_RDPHALF_1,24,8),					      \
-	_GBI_STATIC_PTR(dl),						}},    \
+_GBI_STATIC_COMMAND(_SHIFTL(G_RDPHALF_1,24,8), dl),                        \
 {{	_SHIFTL(G_BRANCH_Z,24,8)|_SHIFTL((vtx)*5,12,12)|_SHIFTL((vtx)*2,0,12),\
-	_GBI_STATIC_PTR(zval),						}}
+	(unsigned int)(zval),						}}
 
 /*
  * gSPLoadUcode   RSP loads specified ucode.
@@ -2626,11 +2631,9 @@ _GBI_STATIC_ASSERT(sizeof(Gfx) == 8, "Gfx must remain 8 bytes");
 }
 
 #define	gsSPLoadUcodeEx(uc_start, uc_dstart, uc_dsize)			\
-{{	_SHIFTL(G_RDPHALF_1,24,8),					\
-	_GBI_STATIC_PTR(uc_dstart),				}},	\
-{{	_SHIFTL(G_LOAD_UCODE,24,8)|					\
-	  _SHIFTL((int)(uc_dsize)-1,0,16),				\
-	_GBI_STATIC_PTR(uc_start),				}}
+_GBI_STATIC_COMMAND(_SHIFTL(G_RDPHALF_1,24,8), uc_dstart),                 \
+_GBI_STATIC_COMMAND((_SHIFTL(G_LOAD_UCODE,24,8)|                           \
+	  _SHIFTL((int)(uc_dsize)-1,0,16)), uc_start)
 
 #define	gSPLoadUcode(pkt, uc_start, uc_dstart)				\
         gSPLoadUcodeEx((pkt), (uc_start), (uc_dstart), SP_UCODE_DATA_SIZE)
@@ -2658,11 +2661,8 @@ _GBI_STATIC_ASSERT(sizeof(Gfx) == 8, "Gfx must remain 8 bytes");
 }
 
 #define	gsSPDma_io(flag, dmem, dram, size)				\
-{{									\
-	_SHIFTL(G_DMA_IO,24,8)|_SHIFTL((flag),23,1)|			\
-	_SHIFTL((dmem)/8,13,10)|_SHIFTL((size)-1,0,12),			\
-	_GBI_STATIC_PTR(dram)						\
-}}
+_GBI_STATIC_COMMAND((_SHIFTL(G_DMA_IO,24,8)|_SHIFTL((flag),23,1)|          \
+	_SHIFTL((dmem)/8,13,10)|_SHIFTL((size)-1,0,12)), dram)
 
 #define	gSPDmaRead(pkt,dmem,dram,size)	gSPDma_io((pkt),0,(dmem),(dram),(size))
 #define	gsSPDmaRead(dmem,dram,size)	gsSPDma_io(0,(dmem),(dram),(size))
@@ -3237,12 +3237,9 @@ _GBI_STATIC_ASSERT(sizeof(Gfx) == 8, "Gfx must remain 8 bytes");
 	_g->words.w1 = _GBI_RUNTIME_PTR(i);				\
 }
 
-#define	gsSetImage(cmd, fmt, siz, width, i)				\
-{{									\
-	_SHIFTL(cmd, 24, 8) | _SHIFTL(fmt, 21, 3) |			\
-	_SHIFTL(siz, 19, 2) | _SHIFTL((width)-1, 0, 12),		\
-	(unsigned int)(i)						\
-}}
+#define	gsSetImage(cmd, fmt, siz, width, i) \
+        _GBI_STATIC_COMMAND((_SHIFTL(cmd, 24, 8) | _SHIFTL(fmt, 21, 3) | \
+                             _SHIFTL(siz, 19, 2) | _SHIFTL((width)-1, 0, 12)), i)
 
 #define	gDPSetColorImage(pkt, f, s, w, i)	gSetImage(pkt, G_SETCIMG, f, s, w, i)
 #define	gsDPSetColorImage(f, s, w, i)		gsSetImage(G_SETCIMG, f, s, w, i)
