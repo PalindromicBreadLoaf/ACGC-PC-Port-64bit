@@ -12,6 +12,7 @@
 #include "dolphin/gx/GXStruct.h"
 #include "dolphin/mtx.h"
 #include "pc_portability.h"
+#include "pc_pointer_token.h"
 
 #define CHECK(condition)                                                                                               \
     do {                                                                                                               \
@@ -89,6 +90,92 @@ static int test_checked_narrowing(void) {
     CHECK(result == UINT32_C(0xfeedface));
 #endif
 
+    return 0;
+}
+
+static int test_pointer_tokens(void) {
+    uint32_t gbi_token;
+    uint32_t duplicate_token;
+    uint32_t acmd_token;
+    uintptr_t resolved = 0u;
+    uintptr_t gbi_pointer = UINT64_C(0x123456789abcdef0);
+    uintptr_t acmd_pointer = UINT64_C(0x0fedcba987654321);
+
+    pc_pointer_token_reset(PC_POINTER_TOKEN_DOMAIN_GBI);
+    pc_pointer_token_reset(PC_POINTER_TOKEN_DOMAIN_ACMD);
+
+    CHECK(pc_pointer_token_pack(PC_POINTER_TOKEN_DOMAIN_GBI, gbi_pointer, &gbi_token) == PC_POINTER_TOKEN_OK);
+    CHECK(pc_pointer_token_is_token(gbi_token));
+    CHECK(pc_pointer_token_pack(PC_POINTER_TOKEN_DOMAIN_GBI, gbi_pointer, &duplicate_token) == PC_POINTER_TOKEN_OK);
+    CHECK(duplicate_token == gbi_token);
+    CHECK(pc_pointer_token_active_count(PC_POINTER_TOKEN_DOMAIN_GBI) == 1u);
+    CHECK(pc_pointer_token_resolve(PC_POINTER_TOKEN_DOMAIN_GBI, gbi_token, &resolved) == PC_POINTER_TOKEN_OK);
+    CHECK(resolved == gbi_pointer);
+
+    CHECK(pc_pointer_token_pack(PC_POINTER_TOKEN_DOMAIN_ACMD, acmd_pointer, &acmd_token) == PC_POINTER_TOKEN_OK);
+    CHECK(acmd_token != gbi_token);
+    CHECK(pc_pointer_token_resolve(PC_POINTER_TOKEN_DOMAIN_GBI, acmd_token, &resolved) ==
+          PC_POINTER_TOKEN_WRONG_DOMAIN);
+    CHECK(pc_pointer_token_resolve(PC_POINTER_TOKEN_DOMAIN_ACMD, gbi_token, &resolved) ==
+          PC_POINTER_TOKEN_WRONG_DOMAIN);
+    CHECK(pc_pointer_token_resolve(PC_POINTER_TOKEN_DOMAIN_GBI, UINT32_C(0x03000000), &resolved) ==
+          PC_POINTER_TOKEN_NOT_TOKEN);
+    CHECK(pc_pointer_token_resolve(PC_POINTER_TOKEN_DOMAIN_GBI, UINT32_C(0xfc000001), &resolved) ==
+          PC_POINTER_TOKEN_INVALID_DOMAIN);
+    CHECK(strcmp(pc_pointer_token_result_name(PC_POINTER_TOKEN_STALE), "stale token") == 0);
+
+    CHECK(pc_pointer_token_release(PC_POINTER_TOKEN_DOMAIN_GBI, gbi_token) == PC_POINTER_TOKEN_OK);
+    CHECK(pc_pointer_token_resolve(PC_POINTER_TOKEN_DOMAIN_GBI, gbi_token, &resolved) == PC_POINTER_TOKEN_STALE);
+    CHECK(pc_pointer_token_pack(PC_POINTER_TOKEN_DOMAIN_GBI, gbi_pointer, &duplicate_token) == PC_POINTER_TOKEN_OK);
+    CHECK(duplicate_token != gbi_token);
+    CHECK(pc_pointer_token_resolve(PC_POINTER_TOKEN_DOMAIN_GBI, gbi_token, &resolved) == PC_POINTER_TOKEN_STALE);
+
+    pc_pointer_token_reset(PC_POINTER_TOKEN_DOMAIN_GBI);
+    CHECK(pc_pointer_token_resolve(PC_POINTER_TOKEN_DOMAIN_GBI, duplicate_token, &resolved) == PC_POINTER_TOKEN_STALE);
+    CHECK(pc_pointer_token_resolve(PC_POINTER_TOKEN_DOMAIN_ACMD, acmd_token, &resolved) == PC_POINTER_TOKEN_OK);
+    CHECK(resolved == acmd_pointer);
+    pc_pointer_token_reset(PC_POINTER_TOKEN_DOMAIN_ACMD);
+    return 0;
+}
+
+static int test_pointer_token_exhaustion(void) {
+    uint32_t tokens[PC_POINTER_TOKEN_CAPACITY];
+    uint32_t overflow_token = 0u;
+    uintptr_t resolved;
+    uint32_t i;
+
+    pc_pointer_token_reset(PC_POINTER_TOKEN_DOMAIN_GBI);
+    for (i = 0u; i < PC_POINTER_TOKEN_CAPACITY; i++) {
+        CHECK(pc_pointer_token_pack(PC_POINTER_TOKEN_DOMAIN_GBI, (uintptr_t)i + UINT32_C(0x10000), &tokens[i]) ==
+              PC_POINTER_TOKEN_OK);
+    }
+    CHECK(pc_pointer_token_active_count(PC_POINTER_TOKEN_DOMAIN_GBI) == PC_POINTER_TOKEN_CAPACITY);
+    CHECK(pc_pointer_token_pack(PC_POINTER_TOKEN_DOMAIN_GBI, UINT32_C(0xdeadbeef), &overflow_token) ==
+          PC_POINTER_TOKEN_EXHAUSTED);
+    CHECK(overflow_token == 0u);
+
+    CHECK(pc_pointer_token_release(PC_POINTER_TOKEN_DOMAIN_GBI, tokens[0]) == PC_POINTER_TOKEN_OK);
+    CHECK(pc_pointer_token_pack(PC_POINTER_TOKEN_DOMAIN_GBI, UINT32_C(0xdeadbeef), &overflow_token) ==
+          PC_POINTER_TOKEN_OK);
+    CHECK(pc_pointer_token_resolve(PC_POINTER_TOKEN_DOMAIN_GBI, tokens[0], &resolved) == PC_POINTER_TOKEN_STALE);
+    pc_pointer_token_reset(PC_POINTER_TOKEN_DOMAIN_GBI);
+    return 0;
+}
+
+static int test_gbi_pointer_tokens(void) {
+    uintptr_t pointer = UINT64_C(0x1234567887654321);
+    uintptr_t resolved = 0u;
+    unsigned int token;
+
+    pc_pointer_token_reset(PC_POINTER_TOKEN_DOMAIN_GBI);
+    token = pc_gbi_pack_runtime_ptr(pointer, 1, "pointer", __FILE__, __LINE__);
+    CHECK(pc_pointer_token_is_token(token));
+    CHECK(pc_gbi_unpack_runtime_ptr(token, &resolved) == PC_POINTER_TOKEN_OK);
+    CHECK(resolved == pointer);
+    CHECK(pc_gbi_pack_runtime_ptr(UINT32_C(0x03000000), 0, "segment", __FILE__, __LINE__) ==
+          UINT32_C(0x03000000));
+    pc_pointer_token_reset(PC_POINTER_TOKEN_DOMAIN_GBI);
+    CHECK(pc_gbi_unpack_runtime_ptr(token, &resolved) == PC_POINTER_TOKEN_STALE);
     return 0;
 }
 
@@ -195,6 +282,9 @@ int main(void) {
     CHECK(test_big_endian_loads() == 0);
     CHECK(test_big_endian_stores() == 0);
     CHECK(test_checked_narrowing() == 0);
+    CHECK(test_pointer_tokens() == 0);
+    CHECK(test_pointer_token_exhaustion() == 0);
+    CHECK(test_gbi_pointer_tokens() == 0);
     CHECK(test_two_head_arena() == 0);
     CHECK(test_gamealloc() == 0);
     return 0;

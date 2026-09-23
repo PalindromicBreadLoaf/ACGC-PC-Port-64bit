@@ -41,7 +41,7 @@ _GBI_STATIC_ASSERT(sizeof(void*) == sizeof(unsigned int), "GBI pointer packing r
 extern "C" {
 #endif
 unsigned int pc_gbi_pack_runtime_ptr(uintptr_t addr, int is_ptr, const char* expr, const char* file, int line);
-uintptr_t pc_gbi_unpack_runtime_ptr(unsigned int packed);
+int pc_gbi_unpack_runtime_ptr(unsigned int packed, uintptr_t* addr_out);
 #ifdef __cplusplus
 }
 #endif
@@ -52,8 +52,8 @@ uintptr_t pc_gbi_unpack_runtime_ptr(unsigned int packed);
 #ifndef _GBI_STATIC_PTR
 #define _GBI_STATIC_PTR(s) (unsigned int)(uintptr_t)(s)
 #endif
-/* Runtime display-list commands tag real PC pointers in bit 0. N64 segmented
-   addresses are integer expressions and are left unchanged. */
+/* Runtime display-list commands encode real PC pointers as opaque handles.
+   N64 segmented addresses are integer expressions and are left unchanged. */
 #ifndef _GBI_RUNTIME_PTR
 #define _GBI_IS_RUNTIME_PTR_EXPR(s) (__builtin_classify_type(s) == 5 || __builtin_classify_type(s) == 14)
 #define _GBI_RUNTIME_PTR(s) \

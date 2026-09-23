@@ -5,23 +5,26 @@
 #include "MSL_C/w_math.h"
 
 #ifdef TARGET_PC
+#include "pc_pointer_token.h"
+
 static_assert(sizeof(void*) == sizeof(u32), "seg2k0 pointer resolution requires 32-bit pointers");
 
 /* Executable image range from pc_main.c — BSS/data can collide with N64 segments */
 extern "C" unsigned int pc_image_base;
 extern "C" unsigned int pc_image_end;
-extern "C" uintptr_t pc_gbi_unpack_runtime_ptr(unsigned int packed);
+extern "C" int pc_gbi_unpack_runtime_ptr(unsigned int packed, uintptr_t* addr_out);
 
 u32 emu64::seg2k0(u32 segadr) {
-    uintptr_t odd_ptr = pc_gbi_unpack_runtime_ptr(segadr);
-    if (odd_ptr != 0) {
-        return (u32)odd_ptr;
-    }
+    uintptr_t runtime_ptr;
+    int token_result = pc_gbi_unpack_runtime_ptr(segadr, &runtime_ptr);
 
-    /* Runtime GBI macros tag direct PC pointers in bit 0. Segment references
-       keep the low bit clear so they still resolve through the segment table. */
-    if ((segadr & 1) != 0) {
-        return segadr & ~1u;
+    if (token_result == PC_POINTER_TOKEN_OK) {
+        return (u32)runtime_ptr;
+    }
+    if (token_result != PC_POINTER_TOKEN_NOT_TOKEN) {
+        this->Printf0("invalid GBI pointer token: %08x (%s)\n", segadr,
+                      pc_pointer_token_result_name((pc_pointer_token_result)token_result));
+        return 0;
     }
 
     /* Addresses above the N64 segment range (upper nibble != 0) or below
