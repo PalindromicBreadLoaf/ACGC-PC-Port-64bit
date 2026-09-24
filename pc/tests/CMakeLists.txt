@@ -231,3 +231,27 @@ target_compile_options(pc_asset_decode_tests PRIVATE
 )
 
 add_test(NAME pc_asset_decode COMMAND pc_asset_decode_tests)
+
+add_executable(pc_save_roundtrip_tests
+    save_roundtrip_tests.c
+    ../src/pc_save_bswap.c
+)
+
+target_include_directories(pc_save_roundtrip_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+)
+
+target_compile_definitions(pc_save_roundtrip_tests PRIVATE TARGET_PC _LANGUAGE_C F3DEX_GBI_2 PC_GBI_LAYOUT_TEST)
+target_compile_options(pc_save_roundtrip_tests PRIVATE
+    -Wall
+    -Wextra
+    -Wno-comment
+    -Wno-multichar
+    -Wno-unknown-pragmas
+    -Wno-unused-function
+    -Werror=pointer-to-int-cast
+    -Werror=int-to-pointer-cast
+)
+
+add_test(NAME pc_save_roundtrip COMMAND pc_save_roundtrip_tests)
