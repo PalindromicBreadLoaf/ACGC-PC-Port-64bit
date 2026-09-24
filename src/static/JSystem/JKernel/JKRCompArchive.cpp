@@ -8,6 +8,10 @@
 #include "JSystem/JSystem.h"
 #include "JSystem/JUtility/JUTAssertion.h"
 
+#ifdef TARGET_PC
+#include "pc_rarc.h"
+#endif
+
 JKRCompArchive::JKRCompArchive(s32 entryNum, EMountDirection mountDirection) : JKRArchive(entryNum, MOUNT_COMP) {
     mMountDirection = mountDirection;
     if (!open(entryNum)) {
@@ -40,6 +44,12 @@ JKRCompArchive::~JKRCompArchive() {
         JKRFreeToHeap(mHeap, mArcInfoBlock);
         mArcInfoBlock = nullptr;
     }
+#ifdef TARGET_PC
+    if (mPcArchiveBuffer) {
+        JKRFreeToHeap(mHeap, mPcArchiveBuffer);
+        mPcArchiveBuffer = nullptr;
+    }
+#endif
     if (mAramPart) {
         delete mAramPart;
     }
@@ -62,12 +72,96 @@ bool JKRCompArchive::open(s32 entryNum) {
     mDirectories = nullptr;
     mFileEntries = nullptr;
     mStrTable = nullptr;
+#ifdef TARGET_PC
+    mPcArchiveBuffer = nullptr;
+#endif
 
     mDvdFile = new (JKRGetSystemHeap(), 0) JKRDvdFile(entryNum);
     if (mDvdFile == nullptr) {
         mMountMode = 0;
         return 0;
     }
+#ifdef TARGET_PC
+    u8* headerBytes = (u8*)JKRAllocFromSysHeap(sizeof(pc_rarc_header_disk), -32);
+    if (headerBytes == nullptr) {
+        mMountMode = 0;
+    } else {
+        pc_rarc_header header;
+        JKRDvdToMainRam(entryNum, headerBytes, EXPAND_SWITCH_DECOMPRESS, sizeof(pc_rarc_header_disk), nullptr,
+                        JKRDvdRipper::ALLOC_DIR_TOP, 0, &mCompression);
+        if (!pc_rarc_decode_header(&header, headerBytes, sizeof(pc_rarc_header_disk)) ||
+            header.file_data_offset > UINT32_MAX - header.header_length ||
+            header.mram_data_length > UINT32_MAX - (header.header_length + header.file_data_offset) ||
+            header.mram_data_length > header.file_data_length ||
+            header.aram_data_length > header.file_data_length - header.mram_data_length ||
+            mDvdFile->getFileSize() > UINT32_MAX - 31) {
+            mMountMode = 0;
+        } else {
+            u32 metadataSize = header.header_length + header.file_data_offset;
+            u32 residentSize = metadataSize + header.mram_data_length;
+            int alignment = mMountDirection == MOUNT_DIRECTION_HEAD ? 32 : -32;
+            mSizeOfMemPart = header.mram_data_length;
+            mSizeOfAramPart = header.aram_data_length;
+            u32 allocationSize = mCompression == JKRCOMPRESSION_YAY0 ? header.file_length : residentSize;
+            mPcArchiveBuffer = JKRAllocFromHeap(mHeap, allocationSize, alignment);
+            if (mPcArchiveBuffer == nullptr) {
+                mMountMode = 0;
+            } else {
+                if (mCompression == JKRCOMPRESSION_YAY0) {
+                    u32 compressedSize = ALIGN_NEXT(mDvdFile->getFileSize(), 32);
+                    u8* compressed = (u8*)JKRAllocFromSysHeap(compressedSize, 32);
+                    if (compressed == nullptr) {
+                        mMountMode = 0;
+                    } else {
+                        JKRDvdToMainRam(entryNum, compressed, EXPAND_SWITCH_NONE, compressedSize, nullptr,
+                                        JKRDvdRipper::ALLOC_DIR_TOP, 0, nullptr);
+                        JKRDecompress(compressed, (u8*)mPcArchiveBuffer, allocationSize, 0);
+                        JKRFreeToSysHeap(compressed);
+                    }
+                } else {
+                    JKRDvdToMainRam(entryNum, (u8*)mPcArchiveBuffer, EXPAND_SWITCH_DECOMPRESS, residentSize, nullptr,
+                                    JKRDvdRipper::ALLOC_DIR_TOP, 0, nullptr);
+                }
+                if (mMountMode == 0 || !setPcArchiveMetadata(mPcArchiveBuffer, metadataSize, false)) {
+                    mMountMode = 0;
+                } else {
+                    _60 = (uintptr_t)mPcArchiveBuffer + metadataSize;
+                    _68 = metadataSize;
+                    if (mSizeOfAramPart != 0) {
+                        mAramPart = JKRAllocFromAram(mSizeOfAramPart, JKRAramHeap::Head);
+                        if (mAramPart == nullptr) {
+                            mMountMode = 0;
+                        } else {
+                            if (mCompression == JKRCOMPRESSION_YAY0) {
+                                JKRMainRamToAram((u8*)mPcArchiveBuffer + metadataSize + mSizeOfMemPart,
+                                                 mAramPart->getAddress(), mSizeOfAramPart, EXPAND_SWITCH_DEFAULT, 0,
+                                                 nullptr, -1, (u32)0);
+                            } else {
+                                JKRDvdToAram(entryNum, mAramPart->getAddress(), EXPAND_SWITCH_DECOMPRESS,
+                                             metadataSize + mSizeOfMemPart, 0);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        JKRFreeToSysHeap(headerBytes);
+    }
+    if (mMountMode == 0) {
+        clearPcArchiveMetadata();
+        if (mAramPart != nullptr) {
+            delete mAramPart;
+            mAramPart = nullptr;
+        }
+        if (mPcArchiveBuffer != nullptr) {
+            JKRFreeToHeap(mHeap, mPcArchiveBuffer);
+            mPcArchiveBuffer = nullptr;
+        }
+        delete mDvdFile;
+        mDvdFile = nullptr;
+    }
+    return mMountMode != 0;
+#else
     SArcHeader* arcHeader =
         (SArcHeader*)JKRAllocFromSysHeap(sizeof(SArcHeader), -32); // NOTE: unconfirmed if this struct is used
     if (arcHeader == nullptr) {
@@ -178,6 +272,7 @@ bool JKRCompArchive::open(s32 entryNum) {
         }
     }
     return mMountMode != 0;
+#endif
 }
 
 void* JKRCompArchive::fetchResource(SDIFileEntry* fileEntry, u32* pSize) {

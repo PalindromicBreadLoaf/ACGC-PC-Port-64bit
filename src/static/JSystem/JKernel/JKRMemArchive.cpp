@@ -7,6 +7,10 @@
 #include "JSystem/JKernel/JKRDvdRipper.h"
 #include "JSystem/JUtility/JUTAssertion.h"
 
+#ifdef TARGET_PC
+#include "pc_rarc.h"
+#endif
+
 JKRMemArchive::JKRMemArchive() : JKRArchive() {
 }
 
@@ -23,7 +27,12 @@ JKRMemArchive::JKRMemArchive(s32 entryNum, EMountDirection mountDirection) : JKR
     }
 }
 
-JKRMemArchive::JKRMemArchive(void* mem, u32 size, JKRMemBreakFlag breakFlag) : JKRArchive((s32)mem, MOUNT_MEM) {
+JKRMemArchive::JKRMemArchive(void* mem, u32 size, JKRMemBreakFlag breakFlag)
+#ifdef TARGET_PC
+    : JKRArchive(mem, MOUNT_MEM) {
+#else
+    : JKRArchive((s32)mem, MOUNT_MEM) {
+#endif
     mIsMounted = false;
     if (!open(mem, size, breakFlag)) {
         return;
@@ -36,6 +45,16 @@ JKRMemArchive::JKRMemArchive(void* mem, u32 size, JKRMemBreakFlag breakFlag) : J
 }
 
 JKRMemArchive::~JKRMemArchive() {
+#ifdef TARGET_PC
+    clearPcArchiveMetadata();
+    if (mIsOpen && mArcHeader) {
+        JKRFreeToHeap(mHeap, mArcHeader);
+    }
+    if (mIsMounted == true) {
+        sVolumeList.remove(&mFileLoaderLink);
+        mIsMounted = false;
+    }
+#else
     if (mIsMounted == true) {
         if (mIsOpen && mArcHeader)
             JKRFreeToHeap(mHeap, mArcHeader);
@@ -43,6 +62,7 @@ JKRMemArchive::~JKRMemArchive() {
         sVolumeList.remove(&mFileLoaderLink);
         mIsMounted = false;
     }
+#endif
 }
 
 #if DEBUG // function is needed to generate certain strings first, however this is not what the original function looks
@@ -78,6 +98,16 @@ bool JKRMemArchive::open(s32 entryNum, JKRArchive::EMountDirection mountDirectio
     if (!mArcHeader) {
         mMountMode = UNKNOWN_MOUNT_MODE;
     } else {
+#ifdef TARGET_PC
+        mIsOpen = true;
+        pc_rarc_header header;
+        if (!pc_rarc_decode_header(&header, mArcHeader, sizeof(pc_rarc_header_disk)) ||
+            !setPcArchiveMetadata(mArcHeader, header.file_length, true)) {
+            mMountMode = UNKNOWN_MOUNT_MODE;
+        } else {
+            mArchiveData = (u8*)mArcHeader + header.header_length + header.file_data_offset;
+        }
+#else
         JUT_ASSERT(mArcHeader->signature == 'RARC');
         mArcInfoBlock = (SArcDataInfo*)((u8*)mArcHeader + mArcHeader->header_length);
         mDirectories = (SDIDirEntry*)((u8*)&mArcInfoBlock->num_nodes + mArcInfoBlock->node_offset);
@@ -86,6 +116,7 @@ bool JKRMemArchive::open(s32 entryNum, JKRArchive::EMountDirection mountDirectio
 
         mArchiveData = (u8*)mArcHeader + mArcHeader->header_length + mArcHeader->file_data_offset;
         mIsOpen = true;
+#endif
     }
 #if DEBUG
     // OS Assert?
@@ -98,14 +129,37 @@ bool JKRMemArchive::open(s32 entryNum, JKRArchive::EMountDirection mountDirectio
 
 bool JKRMemArchive::open(void* buffer, u32 bufferSize, JKRMemBreakFlag flag) {
     mArcHeader = (SArcHeader*)buffer;
+#ifdef TARGET_PC
+    pc_rarc_header header;
+    size_t archiveSize = bufferSize;
+    JKRHeap* bufferHeap = JKRHeap::findFromRoot(buffer);
+    if (bufferHeap != nullptr) {
+        mHeap = bufferHeap;
+    }
+    if (!pc_rarc_decode_header(&header, buffer, sizeof(pc_rarc_header_disk))) {
+        mMountMode = UNKNOWN_MOUNT_MODE;
+        return false;
+    }
+    if (bufferSize == UINT16_MAX) {
+        archiveSize = header.file_length;
+    }
+    if (!setPcArchiveMetadata(buffer, archiveSize, true)) {
+        mMountMode = UNKNOWN_MOUNT_MODE;
+        return false;
+    }
+    mArchiveData = (u8*)buffer + header.header_length + header.file_data_offset;
+#else
     JUT_ASSERT(mArcHeader->signature == 'RARC');
     mArcInfoBlock = (SArcDataInfo*)((u8*)mArcHeader + mArcHeader->header_length);
     mDirectories = (SDIDirEntry*)((u8*)&mArcInfoBlock->num_nodes + mArcInfoBlock->node_offset);
     mFileEntries = (SDIFileEntry*)((u8*)&mArcInfoBlock->num_nodes + mArcInfoBlock->file_entry_offset);
     mStrTable = (char*)((u8*)&mArcInfoBlock->num_nodes + mArcInfoBlock->string_table_offset);
     mArchiveData = (u8*)mArcHeader + mArcHeader->header_length + mArcHeader->file_data_offset;
+#endif
     mIsOpen = (flag == MBF_1) ? true : false; // mIsOpen might be u8
+#ifndef TARGET_PC
     mHeap = JKRHeap::findFromRoot(buffer);
+#endif
     mCompression = JKRCOMPRESSION_NONE;
     return true;
 }

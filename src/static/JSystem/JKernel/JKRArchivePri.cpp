@@ -1,15 +1,27 @@
+#ifdef TARGET_PC
+#include <ctype.h>
+#else
 #include <MSL_C/ctype.h>
+#endif
 #include <string.h>
 
 #include "JSystem/JKernel/JKRArchive.h"
 #include "JSystem/JKernel/JKRFileLoader.h"
 #include "types.h"
 
+#ifdef TARGET_PC
+#include <limits.h>
+#include "pc_rarc.h"
+#endif
+
 u32 JKRArchive::sCurrentDirID;
 
 JKRArchive::JKRArchive() {
     mIsMounted = false;
     mMountDirection = MOUNT_DIRECTION_HEAD;
+#ifdef TARGET_PC
+    mMountAddress = nullptr;
+#endif
 }
 
 JKRArchive::JKRArchive(s32 entryNum, JKRArchive::EMountMode mountMode) : JKRFileLoader() {
@@ -22,11 +34,136 @@ JKRArchive::JKRArchive(s32 entryNum, JKRArchive::EMountMode mountMode) : JKRFile
         mHeap = JKRHeap::sCurrentHeap;
     }
     mEntryNum = entryNum;
+#ifdef TARGET_PC
+    mMountAddress = nullptr;
+#endif
     if (sCurrentVolume == nullptr) {
         sCurrentDirID = 0;
         sCurrentVolume = this;
     }
 }
+
+#ifdef TARGET_PC
+JKRArchive::JKRArchive(void* address, JKRArchive::EMountMode mountMode) : JKRFileLoader() {
+    mIsMounted = false;
+    mMountMode = mountMode;
+    mMountCount = 1;
+    _54 = 1;
+    mHeap = JKRHeap::findFromRoot(address);
+    if (!mHeap) {
+        mHeap = JKRHeap::sCurrentHeap;
+    }
+    mEntryNum = -1;
+    mMountAddress = address;
+    mMountDirection = MOUNT_DIRECTION_HEAD;
+    if (sCurrentVolume == nullptr) {
+        sCurrentDirID = 0;
+        sCurrentVolume = this;
+    }
+}
+
+static bool pcArchiveAddSize(size_t* total, size_t count, size_t itemSize) {
+    if (itemSize != 0 && count > (SIZE_MAX - *total) / itemSize) {
+        return false;
+    }
+    *total += count * itemSize;
+    return true;
+}
+
+static bool pcArchiveAlignSize(size_t* value, size_t alignment) {
+    size_t mask = alignment - 1;
+    if (*value > SIZE_MAX - mask) {
+        return false;
+    }
+    *value = (*value + mask) & ~mask;
+    return true;
+}
+
+bool JKRArchive::setPcArchiveMetadata(const void* data, size_t size, bool requireFileData) {
+    pc_rarc_view view;
+    size_t directoryOffset = sizeof(SArcDataInfo);
+    size_t fileOffset;
+    size_t stringOffset;
+    size_t total;
+
+    if ((requireFileData ? pc_rarc_open(&view, data, size) : pc_rarc_open_metadata(&view, data, size)) == false ||
+        !pcArchiveAddSize(&directoryOffset, view.info.node_count, sizeof(SDIDirEntry))) {
+        return false;
+    }
+    fileOffset = directoryOffset;
+    if (!pcArchiveAlignSize(&fileOffset, alignof(SDIFileEntry))) {
+        return false;
+    }
+    stringOffset = fileOffset;
+    if (!pcArchiveAddSize(&stringOffset, view.info.file_count, sizeof(SDIFileEntry))) {
+        return false;
+    }
+    total = stringOffset;
+    if (!pcArchiveAddSize(&total, view.info.string_table_length, 1) || total > UINT32_MAX) {
+        return false;
+    }
+
+    SArcDataInfo* info = (SArcDataInfo*)JKRAllocFromHeap(
+        mHeap, (u32)total, mMountDirection == MOUNT_DIRECTION_TAIL ? -32 : 32);
+    if (info == nullptr) {
+        return false;
+    }
+    memset(info, 0, total);
+    info->num_nodes = view.info.node_count;
+    info->node_offset = (u32)directoryOffset;
+    info->num_file_entries = view.info.file_count;
+    info->file_entry_offset = (u32)fileOffset;
+    info->string_table_length = view.info.string_table_length;
+    info->string_table_offset = (u32)stringOffset;
+    info->nextFreeFileID = view.info.next_free_file_id;
+    info->isSyncIDs = view.info.sync_file_ids;
+
+    SDIDirEntry* directories = (SDIDirEntry*)((u8*)info + directoryOffset);
+    SDIFileEntry* files = (SDIFileEntry*)((u8*)info + fileOffset);
+    for (u32 i = 0; i < view.info.node_count; ++i) {
+        pc_rarc_directory source;
+        if (!pc_rarc_get_directory(&view, i, &source)) {
+            JKRFreeToHeap(mHeap, info);
+            return false;
+        }
+        directories[i].mType = source.type;
+        directories[i].mOffset = source.name_offset;
+        directories[i]._08 = source.name_hash;
+        directories[i].mNum = source.file_count;
+        directories[i].mFirstIdx = source.first_file_index;
+    }
+    for (u32 i = 0; i < view.info.file_count; ++i) {
+        pc_rarc_file source;
+        if (!pc_rarc_get_file(&view, i, &source)) {
+            JKRFreeToHeap(mHeap, info);
+            return false;
+        }
+        files[i].mFileID = source.file_id;
+        files[i].mHash = source.name_hash;
+        files[i].mFlag = source.flags_and_name_offset;
+        files[i].mDataOffset = source.data_offset;
+        files[i].mSize = source.data_length;
+        files[i].mData = nullptr;
+    }
+    memcpy((u8*)info + stringOffset, pc_rarc_get_string_table(&view), view.info.string_table_length);
+
+    mArcInfoBlock = info;
+    mDirectories = directories;
+    mFileEntries = files;
+    mStrTable = (const char*)((u8*)info + stringOffset);
+    return true;
+}
+
+void JKRArchive::clearPcArchiveMetadata() {
+    if (mArcInfoBlock != nullptr) {
+        JKRFreeToHeap(mHeap, mArcInfoBlock);
+    }
+    mArcInfoBlock = nullptr;
+    mDirectories = nullptr;
+    mFileEntries = nullptr;
+    mStrTable = nullptr;
+}
+#endif
 
 JKRArchive::~JKRArchive() {
 }

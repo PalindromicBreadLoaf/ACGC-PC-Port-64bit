@@ -68,12 +68,16 @@ typedef struct pc_rarc_view {
     size_t data_offset;
     pc_rarc_header header;
     pc_rarc_info info;
+    bool has_file_data;
 } pc_rarc_view;
 
+bool pc_rarc_decode_header(pc_rarc_header* header, const void* data, size_t size);
 bool pc_rarc_open(pc_rarc_view* view, const void* data, size_t size);
+bool pc_rarc_open_metadata(pc_rarc_view* view, const void* data, size_t size);
 bool pc_rarc_get_directory(const pc_rarc_view* view, uint32_t index, pc_rarc_directory* directory);
 bool pc_rarc_get_file(const pc_rarc_view* view, uint32_t index, pc_rarc_file* file);
 const char* pc_rarc_get_string(const pc_rarc_view* view, uint32_t offset);
+const void* pc_rarc_get_string_table(const pc_rarc_view* view);
 const void* pc_rarc_get_file_data(const pc_rarc_view* view, const pc_rarc_file* file);
 
 #ifdef __cplusplus

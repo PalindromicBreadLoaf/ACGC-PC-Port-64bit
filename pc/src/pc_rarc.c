@@ -78,8 +78,18 @@ const char* pc_rarc_get_string(const pc_rarc_view* view, uint32_t offset) {
     return (const char*)(view->bytes + string_offset + offset);
 }
 
+const void* pc_rarc_get_string_table(const pc_rarc_view* view) {
+    size_t string_offset;
+
+    if (view == NULL || !pc_rarc_add(view->info_offset, view->info.string_table_offset, &string_offset)) {
+        return NULL;
+    }
+    return view->bytes + string_offset;
+}
+
 const void* pc_rarc_get_file_data(const pc_rarc_view* view, const pc_rarc_file* file) {
-    if (view == NULL || file == NULL || (file->flags_and_name_offset & PC_RARC_DIRECTORY_FLAG) != 0 ||
+    if (view == NULL || file == NULL || !view->has_file_data ||
+        (file->flags_and_name_offset & PC_RARC_DIRECTORY_FLAG) != 0 ||
         file->data_offset > view->header.file_data_length ||
         file->data_length > view->header.file_data_length - file->data_offset) {
         return NULL;
@@ -87,28 +97,47 @@ const void* pc_rarc_get_file_data(const pc_rarc_view* view, const pc_rarc_file* 
     return view->bytes + view->data_offset + file->data_offset;
 }
 
-bool pc_rarc_open(pc_rarc_view* view, const void* data, size_t size) {
+bool pc_rarc_decode_header(pc_rarc_header* header, const void* data, size_t size) {
     const uint8_t* bytes = (const uint8_t*)data;
+
+    if (header == NULL || data == NULL || size < sizeof(pc_rarc_header_disk) || pc_load_be32(bytes) != PC_RARC_MAGIC) {
+        return false;
+    }
+    header->file_length = pc_load_be32(bytes + 4);
+    header->header_length = pc_load_be32(bytes + 8);
+    header->file_data_offset = pc_load_be32(bytes + 12);
+    header->file_data_length = pc_load_be32(bytes + 16);
+    header->mram_data_length = pc_load_be32(bytes + 20);
+    header->aram_data_length = pc_load_be32(bytes + 24);
+    if (header->header_length < sizeof(pc_rarc_header_disk) ||
+        header->file_data_offset > UINT32_MAX - header->header_length ||
+        header->file_data_length > UINT32_MAX - (header->header_length + header->file_data_offset) ||
+        header->header_length + header->file_data_offset + header->file_data_length > header->file_length) {
+        return false;
+    }
+    return true;
+}
+
+static bool pc_rarc_open_internal(pc_rarc_view* view, const void* data, size_t size, bool require_file_data) {
+    const uint8_t* bytes = (const uint8_t*)data;
+    pc_rarc_header header;
     size_t metadata_end;
+    size_t archive_end;
     size_t nodes_offset;
     size_t files_offset;
     size_t strings_offset;
     uint32_t i;
 
-    if (view == NULL || data == NULL || size < sizeof(pc_rarc_header_disk) || pc_load_be32(bytes) != PC_RARC_MAGIC) {
+    if (view == NULL || !pc_rarc_decode_header(&header, data, size)) {
         return false;
     }
     memset(view, 0, sizeof(*view));
     view->bytes = bytes;
     view->size = size;
-    view->header.file_length = pc_load_be32(bytes + 4);
-    view->header.header_length = pc_load_be32(bytes + 8);
-    view->header.file_data_offset = pc_load_be32(bytes + 12);
-    view->header.file_data_length = pc_load_be32(bytes + 16);
-    view->header.mram_data_length = pc_load_be32(bytes + 20);
-    view->header.aram_data_length = pc_load_be32(bytes + 24);
+    view->header = header;
 
-    if (view->header.file_length > size || view->header.header_length < sizeof(pc_rarc_header_disk) ||
+    if (view->header.header_length < sizeof(pc_rarc_header_disk) ||
+        !pc_rarc_range(size, view->header.header_length, 1, sizeof(pc_rarc_info_disk)) ||
         !pc_rarc_range(view->header.file_length, view->header.header_length, 1, sizeof(pc_rarc_info_disk))) {
         return false;
     }
@@ -124,11 +153,12 @@ bool pc_rarc_open(pc_rarc_view* view, const void* data, size_t size) {
     view->info.sync_file_ids = bytes[26] != 0;
 
     if (!pc_rarc_add(view->info_offset, view->header.file_data_offset, &metadata_end) ||
-        !pc_rarc_add(metadata_end, view->header.file_data_length, &view->data_offset) ||
-        view->data_offset > view->header.file_length) {
+        !pc_rarc_add(metadata_end, view->header.file_data_length, &archive_end) ||
+        archive_end > view->header.file_length || metadata_end > size || (require_file_data && archive_end > size)) {
         return false;
     }
     view->data_offset = metadata_end;
+    view->has_file_data = archive_end <= size;
     if (!pc_rarc_add(view->info_offset, view->info.node_offset, &nodes_offset) ||
         !pc_rarc_add(view->info_offset, view->info.file_offset, &files_offset) ||
         !pc_rarc_add(view->info_offset, view->info.string_table_offset, &strings_offset) ||
@@ -162,4 +192,12 @@ bool pc_rarc_open(pc_rarc_view* view, const void* data, size_t size) {
         }
     }
     return true;
+}
+
+bool pc_rarc_open(pc_rarc_view* view, const void* data, size_t size) {
+    return pc_rarc_open_internal(view, data, size, true);
+}
+
+bool pc_rarc_open_metadata(pc_rarc_view* view, const void* data, size_t size) {
+    return pc_rarc_open_internal(view, data, size, false);
 }

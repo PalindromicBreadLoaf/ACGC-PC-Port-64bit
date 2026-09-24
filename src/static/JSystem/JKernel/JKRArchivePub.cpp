@@ -31,6 +31,23 @@ JKRArchive* JKRArchive::check_mount_already(s32 entryNum, JKRHeap* pHeap) {
     return nullptr;
 }
 
+#ifdef TARGET_PC
+JKRArchive* JKRArchive::check_mount_already(void* address, JKRHeap* pHeap) {
+    JKRHeap* heap = pHeap ? pHeap : JKRGetCurrentHeap();
+    for (JSUListIterator<JKRFileLoader> iterator = sVolumeList.getFirst(); iterator != sVolumeList.getEnd();
+         ++iterator) {
+        if (iterator->getVolumeType() == 'RARC') {
+            JKRArchive* archive = (JKRArchive*)iterator.getObject();
+            if (archive->mMountAddress == address && archive->mHeap == heap) {
+                archive->mMountCount++;
+                return archive;
+            }
+        }
+    }
+    return nullptr;
+}
+#endif
+
 JKRArchive* JKRArchive::check_mount_already(s32 entryNum) {
     for (JSUListIterator<JKRFileLoader> iterator = sVolumeList.getFirst(); iterator != sVolumeList.getEnd();
          ++iterator) {
@@ -82,7 +99,11 @@ JKRArchive* JKRArchive::mount(const char* path, EMountMode mode, JKRHeap* heap, 
 }
 
 JKRArchive* JKRArchive::mount(void* p1, JKRHeap* heap, EMountDirection mountDirection) {
+#ifdef TARGET_PC
+    JKRArchive* archive = check_mount_already(p1, heap);
+#else
     JKRArchive* archive = check_mount_already((s32)p1, heap);
+#endif
     if (archive != nullptr) {
         return archive;
     }

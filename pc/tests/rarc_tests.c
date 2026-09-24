@@ -87,6 +87,28 @@ static void test_valid_archive(void) {
     CHECK(!pc_rarc_get_file(&view, 1, &file));
 }
 
+static void test_metadata_only_archive(void) {
+    uint8_t archive[128];
+    pc_rarc_header header;
+    pc_rarc_view view;
+    pc_rarc_file file;
+
+    make_archive(archive);
+    CHECK(pc_rarc_decode_header(&header, archive, sizeof(pc_rarc_header_disk)));
+    CHECK(header.file_length == 128);
+    CHECK(header.header_length == 32);
+    CHECK(header.file_data_offset == 80);
+    CHECK(!pc_rarc_open(&view, archive, 112));
+    CHECK(pc_rarc_open_metadata(&view, archive, 112));
+    CHECK(!view.has_file_data);
+    CHECK(pc_rarc_get_file(&view, 0, &file));
+    CHECK(pc_rarc_get_file_data(&view, &file) == NULL);
+    CHECK(strcmp((const char*)pc_rarc_get_string_table(&view) + 5, "file") == 0);
+
+    store_be32(archive + 4, 127);
+    CHECK(!pc_rarc_open_metadata(&view, archive, 112));
+}
+
 static void test_rejected_archives(void) {
     uint8_t archive[128];
     pc_rarc_view view;
@@ -101,6 +123,10 @@ static void test_rejected_archives(void) {
     CHECK(!pc_rarc_open(&view, archive, sizeof(archive)));
 
     make_archive(archive);
+    store_be32(archive + 8, 96);
+    CHECK(!pc_rarc_open_metadata(&view, archive, 32));
+
+    make_archive(archive);
     store_be32(archive + 92, 14);
     CHECK(!pc_rarc_open(&view, archive, sizeof(archive)));
 
@@ -113,6 +139,7 @@ static void test_rejected_archives(void) {
 
 int main(void) {
     test_valid_archive();
+    test_metadata_only_archive();
     test_rejected_archives();
     return failures == 0 ? 0 : 1;
 }

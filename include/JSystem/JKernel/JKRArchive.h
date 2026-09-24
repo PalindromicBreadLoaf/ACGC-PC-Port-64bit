@@ -172,6 +172,9 @@ class JKRArchive : public JKRFileLoader {
                                 JKRExpandSwitch expandSwitch) = 0; // _44
 
     JKRArchive(s32, EMountMode);
+#ifdef TARGET_PC
+    JKRArchive(void*, EMountMode);
+#endif
     JKRArchive();
     JKRArchive(const char* p1, EMountMode mountMode);
     ~JKRArchive();
@@ -195,6 +198,9 @@ class JKRArchive : public JKRFileLoader {
     static void* getGlbResource(u32 type, const char* name, JKRArchive* archive);
     static JKRArchive* check_mount_already(s32);
     static JKRArchive* check_mount_already(s32, JKRHeap*);
+#ifdef TARGET_PC
+    static JKRArchive* check_mount_already(void*, JKRHeap*);
+#endif
 
     SDIDirEntry* findResType(u32) const;
     SDIFileEntry* findTypeResource(u32, u32) const;
@@ -230,6 +236,10 @@ class JKRArchive : public JKRFileLoader {
     static u32 sCurrentDirID;
 
   protected:
+#ifdef TARGET_PC
+    bool setPcArchiveMetadata(const void*, size_t, bool);
+    void clearPcArchiveMetadata();
+#endif
     // _00     = VTBL
     // _00-_38 = JKRFileLoader
     JKRHeap* mHeap;                  // _38
@@ -242,6 +252,9 @@ class JKRArchive : public JKRFileLoader {
     int _54;                         // _54
     int mCompression;                // _58
     EMountDirection mMountDirection; // _5C
+#ifdef TARGET_PC
+    const void* mMountAddress;
+#endif
 };
 
 enum JKRMemBreakFlag { MBF_0 = 0, MBF_1 = 1 };
@@ -294,6 +307,7 @@ struct JKRCompArchive : public JKRArchive {
     // _00-_5C = JKRArchive
 #ifdef TARGET_PC
     uintptr_t _60;
+    void* mPcArchiveBuffer;
 #else
     u32 _60;                 // _60
 #endif

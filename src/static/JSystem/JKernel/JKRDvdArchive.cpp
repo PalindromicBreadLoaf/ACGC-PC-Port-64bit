@@ -8,6 +8,10 @@
 #include "JSystem/JSystem.h"
 #include "JSystem/JUtility/JUTAssertion.h"
 
+#ifdef TARGET_PC
+#include "pc_rarc.h"
+#endif
+
 JKRDvdArchive::JKRDvdArchive() : JKRArchive() {
 }
 
@@ -61,6 +65,37 @@ bool JKRDvdArchive::open(s32 entryNum) {
         mMountMode = 0;
         return 0;
     }
+#ifdef TARGET_PC
+    u8* mem = (u8*)JKRAllocFromSysHeap(sizeof(pc_rarc_header_disk), 32);
+    if (mem == nullptr) {
+        mMountMode = 0;
+    } else {
+        pc_rarc_header header;
+        JKRDvdToMainRam(entryNum, mem, EXPAND_SWITCH_DECOMPRESS, sizeof(pc_rarc_header_disk), nullptr,
+                        JKRDvdRipper::ALLOC_DIR_TOP, 0, &mCompression);
+        if (!pc_rarc_decode_header(&header, mem, sizeof(pc_rarc_header_disk)) ||
+            header.file_data_offset > UINT32_MAX - header.header_length ||
+            header.header_length + header.file_data_offset > UINT32_MAX - 31) {
+            mMountMode = 0;
+        } else {
+            u32 metadataSize = header.header_length + header.file_data_offset;
+            u32 alignedMetadataSize = ALIGN_NEXT(metadataSize, 32);
+            u8* metadata = (u8*)JKRAllocFromSysHeap(alignedMetadataSize, 32);
+            if (metadata == nullptr) {
+                mMountMode = 0;
+            } else {
+                JKRDvdToMainRam(entryNum, metadata, EXPAND_SWITCH_DECOMPRESS, alignedMetadataSize, nullptr,
+                                JKRDvdRipper::ALLOC_DIR_TOP, 0, nullptr);
+                if (!setPcArchiveMetadata(metadata, metadataSize, false)) {
+                    mMountMode = 0;
+                } else {
+                    _60 = (int)metadataSize;
+                }
+                JKRFreeToSysHeap(metadata);
+            }
+        }
+    }
+#else
     SDIFileEntry* mem = (SDIFileEntry*)JKRAllocFromSysHeap(32, 32); // NOTE: unconfirmed if this struct was used here
     if (mem == nullptr) {
         mMountMode = 0;
@@ -82,6 +117,7 @@ bool JKRDvdArchive::open(s32 entryNum) {
             _60 = mem->mDataOffset + mem->mSize; // End of data offset?
         }
     }
+#endif
 cleanup:
     if (mem != nullptr) {
         JKRFreeToSysHeap(mem);
