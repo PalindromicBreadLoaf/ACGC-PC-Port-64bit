@@ -124,7 +124,11 @@ const char* JKRFileLoader::fetchVolumeName(char* buffer, size_t bufferSize, cons
         path++;
         while (*path != 0 && *path != '/') {
             if (1 < bufferSize) {
+#ifdef TARGET_PC
+                *buffer = tolower((unsigned char)*path);
+#else
                 *buffer = _tolower(*path);
+#endif
                 buffer++;
                 bufferSize--;
             }

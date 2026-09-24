@@ -49,42 +49,18 @@ extern "C" {
 #define CONT_ERR_VOICE_WORD 14
 #define CONT_ERR_VOICE_NO_RESPONSE 15
 
-#ifdef TARGET_PC
-/* 'errno' is a macro on PC (from <errno.h>), rename the struct member */
-#ifdef errno
-#undef errno
-#endif
 typedef struct {
     u16 type;
     u8 status;
-    u8 errno;
+    u8 error;
 } OSContStatus;
 
 typedef struct {
     /* 0x00 */ u16 button;
     /* 0x02 */ s8 stick_x;
     /* 0x03 */ s8 stick_y;
-    /* 0x04 */ u8 errno;
+    /* 0x04 */ u8 error;
 } OSContPad;
-/* Restore errno macro */
-#include <errno.h>
-#else
-
-typedef struct {
-    u16 type;
-    u8 status;
-    u8 errno;
-} OSContStatus;
-
-/* sizeof(OSContPad) == 6 */
-typedef struct {
-    /* 0x00 */ u16 button;
-    /* 0x02 */ s8 stick_x;
-    /* 0x03 */ s8 stick_y;
-    /* 0x04 */ u8 errno;
-} OSContPad;
-
-#endif
 
 typedef struct {
     OSContPad pad;

@@ -7,6 +7,17 @@
   },
   "configurePresets": [
     {
+      "name": "linux-x86_64-game",
+      "displayName": "Linux x86-64 game",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/linux-x86_64-game",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "PC_BUILD_GAME": "ON",
+        "PC_BUILD_PORTABILITY_TESTS": "OFF"
+      }
+    },
+    {
       "name": "linux-x86_64-portability",
       "displayName": "Linux x86-64 portability checks",
       "generator": "Ninja",
@@ -30,6 +41,10 @@
     }
   ],
   "buildPresets": [
+    {
+      "name": "linux-x86_64-game",
+      "configurePreset": "linux-x86_64-game"
+    },
     {
       "name": "linux-x86_64-portability",
       "configurePreset": "linux-x86_64-portability"

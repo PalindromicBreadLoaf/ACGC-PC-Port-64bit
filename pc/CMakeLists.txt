@@ -8,6 +8,18 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(PC_BUILD_GAME "Build Animal Crossing" ON)
 option(PC_BUILD_PORTABILITY_TESTS "Build ROM-less portability tests" OFF)
 
+if(WIN32)
+    if(NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
+        message(FATAL_ERROR "The supported Windows build uses the 32-bit ABI")
+    endif()
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
+        message(FATAL_ERROR "The supported Linux build uses the 64-bit ABI")
+    endif()
+else()
+    message(FATAL_ERROR "Unsupported host platform: ${CMAKE_SYSTEM_NAME}")
+endif()
+
 if(PC_BUILD_PORTABILITY_TESTS)
     enable_testing()
     add_subdirectory(tests)
@@ -24,18 +36,6 @@ endif()
 
 # Options
 option(PC_CONSOLE "Show console window (disables -mwindows, useful for debugging)" OFF)
-
-# =============================================================================
-# 32-bit enforcement (required: JSystem casts pointers to u32)
-# =============================================================================
-if(FALSE)
-    message(FATAL_ERROR
-        "This project MUST be built as 32-bit (pointer-to-u32 casts in JSystem).\n"
-        "  Windows/MSYS2: Use the MINGW32 shell (not MINGW64)\n"
-        "  Linux: Use a 32-bit toolchain, e.g.:\n"
-        "    cmake .. -DCMAKE_C_COMPILER=i686-linux-gnu-gcc -DCMAKE_CXX_COMPILER=i686-linux-gnu-g++\n"
-        "    OR: cmake .. -DCMAKE_TOOLCHAIN_FILE=../cmake/Toolchain-linux32.cmake")
-endif()
 
 # Allow mixed C/C++ linkage
 set(CMAKE_C_EXTENSIONS ON)
@@ -130,8 +130,8 @@ if(NOT SDL2_FOUND)
     if(NOT SDL2_FOUND)
         message(FATAL_ERROR
             "SDL2 not found!\n"
-            "  Linux:         sudo apt install libsdl2-dev:i386  (Debian/Ubuntu)\n"
-            "                 sudo dnf install SDL2-devel.i686   (Fedora)\n"
+            "  Linux:         sudo apt install libsdl2-dev       (Debian/Ubuntu)\n"
+            "                 sudo dnf install SDL2-devel        (Fedora)\n"
             "  Windows/MSYS2: pacman -S mingw-w64-i686-SDL2\n"
             "  Or download SDL2 development libraries to ${CMAKE_CURRENT_SOURCE_DIR}/lib/SDL2")
     endif()
@@ -149,6 +149,9 @@ add_library(glad STATIC
 target_include_directories(glad PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/lib/glad/include
 )
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    set_property(TARGET glad PROPERTY POSITION_INDEPENDENT_CODE TRUE)
+endif()
 
 # =============================================================================
 # Collect game source files
@@ -379,13 +382,9 @@ list(FILTER GAME_C_SOURCES EXCLUDE REGEX ".*/emu64_utility\\.c$")
 # Only files that truly need C++ (std::, extern "C", etc.) - NOT just for nullptr
 set_source_files_properties(
     "${DECOMP_ROOT}/src/static/libforest/emu64/emu64.c"
-    # ja_calc.c uses std::sinf, std::sqrtf
-    "${DECOMP_ROOT}/src/static/jaudio_NES/internal/ja_calc.c"
     # sample.c: reinterpret_cast replaced with C cast under TARGET_PC, no longer needs C++
     # jammain_2.c uses extern "C"
     "${DECOMP_ROOT}/src/static/jaudio_NES/internal/jammain_2.c"
-    # game64.c includes .c_inc with extern "C" (OSAttention.c_inc)
-    "${DECOMP_ROOT}/src/static/jaudio_NES/game/game64.c"
     PROPERTIES LANGUAGE CXX
 )
 
@@ -434,6 +433,12 @@ add_executable(ac_pc
     ${GAME_CXX_SOURCES}
     ${RC_FILE}
 )
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    include(CheckPIESupported)
+    check_pie_supported()
+    set_property(TARGET ac_pc PROPERTY POSITION_INDEPENDENT_CODE TRUE)
+endif()
 
 # Link SDL2 without SDL2main (we define SDL_MAIN_HANDLED)
 if(TARGET SDL2::SDL2)

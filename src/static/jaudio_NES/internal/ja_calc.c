@@ -1,6 +1,10 @@
 #include "jaudio_NES/ja_calc.h"
 
+#ifdef TARGET_PC
+#include <math.h>
+#else
 #include "PowerPC_EABI_Support/msl/MSL_C/PPC_EABI/cmath_gcn.h"
+#endif
 // #include "std/Math.h"
 // #include "dolphin/math.h"
 // #include "stl/math.h"
@@ -57,7 +61,7 @@ f32 sinf2(f32 x)
 void Jac_InitSinTable()
 {
 	for (u32 i = 0; i < SINTABLE_LENGTH; i++) {
-		SINTABLE[i] = sinf(i * HALF_PI / 256.0f);
+		SINTABLE[i] = sinf(i * 1.5707964f / 256.0f);
 	}
 }
 
