@@ -174,6 +174,24 @@ target_compile_options(pc_rarc_tests PRIVATE
 
 add_test(NAME pc_rarc COMMAND pc_rarc_tests)
 
+add_executable(pc_executable_tests
+    executable_tests.c
+    ../src/pc_executable.c
+)
+
+target_include_directories(pc_executable_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+)
+
+target_compile_options(pc_executable_tests PRIVATE
+    -Wall
+    -Wextra
+    -Werror
+    -Wconversion
+)
+
+add_test(NAME pc_executable COMMAND pc_executable_tests)
+
 add_executable(pc_audio_bank_tests
     audio_bank_tests.c
     ../src/pc_audio_bank.c

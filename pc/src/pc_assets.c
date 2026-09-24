@@ -7,6 +7,7 @@
 #include "PR/gbi.h"
 #include "pc_assets.h"
 #include "pc_disc.h"
+#include "pc_executable.h"
 
 extern int g_pc_verbose;
 
@@ -15,6 +16,8 @@ enum { SWAP_NONE = 0, SWAP_U16 = 1, SWAP_VTX = 2, SWAP_U32 = 3 };
 
 static u8* g_rel_data = NULL;
 static u8* g_dol_data = NULL;
+static size_t g_rel_size = 0;
+static size_t g_dol_size = 0;
 
 void pc_bswap_asset_u16(void* data, unsigned int size) {
     u16* p = (u16*)data;
@@ -64,16 +67,24 @@ static void do_swap(void* data, unsigned int size, int type) {
     }
 }
 
-static u8* load_file(const char* path, unsigned int* out_size) {
+static u8* load_file(const char* path, size_t* out_size) {
     FILE* f = fopen(path, "rb");
-    unsigned int sz;
+    long file_size;
+    size_t sz;
     u8* buf;
     if (!f) return NULL;
-    fseek(f, 0, SEEK_END); sz = (unsigned int)ftell(f); fseek(f, 0, SEEK_SET);
+    if (fseek(f, 0, SEEK_END) != 0 || (file_size = ftell(f)) < 0 || fseek(f, 0, SEEK_SET) != 0) {
+        fclose(f);
+        return NULL;
+    }
+    sz = (size_t)file_size;
     buf = (u8*)malloc(sz);
-    if (buf) fread(buf, 1, sz, f);
+    if (buf && fread(buf, 1, sz, f) != sz) {
+        free(buf);
+        buf = NULL;
+    }
     fclose(f);
-    if (out_size) *out_size = sz;
+    if (out_size) *out_size = buf ? sz : 0;
     return buf;
 }
 
@@ -83,12 +94,16 @@ void pc_load_asset(const char* bin_path, void* dest, unsigned int size,
     /* Try ROM-direct first */
     if (rom_src != SRC_NONE) {
         u8* rom = (rom_src == SRC_REL) ? g_rel_data : g_dol_data;
-        if (rom) { memcpy(dest, rom + rom_off, size); loaded = 1; }
+        size_t rom_size = (rom_src == SRC_REL) ? g_rel_size : g_dol_size;
+        if (rom && (size_t)rom_off <= rom_size && (size_t)size <= rom_size - (size_t)rom_off) {
+            memcpy(dest, rom + rom_off, size);
+            loaded = 1;
+        }
     }
     /* Fallback to .bin file */
     if (!loaded && bin_path) {
         FILE* f = fopen(bin_path, "rb");
-        if (f) { fread(dest, 1, size, f); fclose(f); loaded = 1; }
+        if (f) { loaded = fread(dest, 1, size, f) == size; fclose(f); }
     }
     if (!loaded) fprintf(stderr, "[PC] ASSET MISSING: %s\n", bin_path ? bin_path : "(rom)");
     if (loaded) do_swap(dest, size, swap_type);
@@ -29866,18 +29881,26 @@ int pc_assets_init(void) {
 
     /* Try disc image (CISO/ISO/GCM) — pc_disc_init() already called from main */
     if (pc_disc_is_open()) {
-        g_dol_data = pc_disc_extract_dol();
-        g_rel_data = pc_disc_extract_rel();
-        if (g_dol_data && g_rel_data) rom_mode = 1;
+        g_dol_data = pc_disc_extract_dol(&g_dol_size);
+        g_rel_data = pc_disc_extract_rel(&g_rel_size);
+        if (g_dol_data && g_rel_data) {
+            pc_dol_view dol;
+            pc_rel_view rel;
+            rom_mode = pc_dol_open(&dol, g_dol_data, g_dol_size) && pc_rel_open(&rel, g_rel_data, g_rel_size);
+        }
     }
 
     /* Fall back to pre-extracted DOL + REL files */
     if (!rom_mode) {
-        g_rel_data = load_file("orig/GAFE01_00/files/foresta.rel.szs", NULL);
-        g_dol_data = load_file("orig/GAFE01_00/sys/main.dol", NULL);
+        if (g_rel_data) { free(g_rel_data); g_rel_data = NULL; }
+        if (g_dol_data) { free(g_dol_data); g_dol_data = NULL; }
+        g_rel_data = load_file("orig/GAFE01_00/files/foresta.rel.szs", &g_rel_size);
+        g_dol_data = load_file("orig/GAFE01_00/sys/main.dol", &g_dol_size);
         if (g_rel_data && g_dol_data) {
-            rom_mode = 1;
-            if (g_pc_verbose) printf("[PC] ROM-direct mode: loaded pre-extracted DOL + REL\n");
+            pc_dol_view dol;
+            pc_rel_view rel;
+            rom_mode = pc_dol_open(&dol, g_dol_data, g_dol_size) && pc_rel_open(&rel, g_rel_data, g_rel_size);
+            if (rom_mode && g_pc_verbose) printf("[PC] ROM-direct mode: loaded pre-extracted DOL + REL\n");
         } else {
             if (g_rel_data) { free(g_rel_data); g_rel_data = NULL; }
             if (g_dol_data) { free(g_dol_data); g_dol_data = NULL; }
@@ -29885,6 +29908,8 @@ int pc_assets_init(void) {
     }
 
     if (!rom_mode) {
+        if (g_rel_data) { free(g_rel_data); g_rel_data = NULL; g_rel_size = 0; }
+        if (g_dol_data) { free(g_dol_data); g_dol_data = NULL; g_dol_size = 0; }
         printf("[PC] No ROM data found (no disc image, no pre-extracted DOL/REL)\n");
         return 0;
     }
@@ -30671,8 +30696,8 @@ int pc_assets_init(void) {
       _pc_load_JUTResFONT_Ascfont_fix12(); }
 
     /* Free ROM data */
-    if (g_rel_data) { free(g_rel_data); g_rel_data = NULL; }
-    if (g_dol_data) { free(g_dol_data); g_dol_data = NULL; }
+    if (g_rel_data) { free(g_rel_data); g_rel_data = NULL; g_rel_size = 0; }
+    if (g_dol_data) { free(g_dol_data); g_dol_data = NULL; g_dol_size = 0; }
 
     if (g_pc_verbose)
         printf("[PC] Assets: %d loaded (%s)\n", loaded, rom_mode ? "ROM-direct" : ".bin fallback");

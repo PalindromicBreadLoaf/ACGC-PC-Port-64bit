@@ -4,6 +4,7 @@
 #include "dolphin/dvd.h"
 #include "jaudio_NES/audiostruct.h"
 #include "pc_audio_bank.h"
+#include "pc_executable.h"
 #include "m_common_data.h"
 #include "m_scene.h"
 
@@ -21,6 +22,11 @@ _Static_assert(sizeof(pc_audio_wavetable_disk) == 16, "audio wavetable disk layo
 _Static_assert(sizeof(pc_audio_loop_disk) == 16, "audio loop disk layout changed");
 _Static_assert(sizeof(pc_audio_book_disk) == 8, "audio book disk layout changed");
 _Static_assert(sizeof(pc_audio_env_disk) == 4, "audio envelope disk layout changed");
+_Static_assert(sizeof(pc_dol_header_disk) == 0x100, "DOL header layout changed");
+_Static_assert(sizeof(pc_rel_header_v1_disk) == 0x40, "REL v1 header layout changed");
+_Static_assert(sizeof(pc_rel_header_v2_disk) == 0x48, "REL v2 header layout changed");
+_Static_assert(sizeof(pc_rel_header_v3_disk) == 0x4c, "REL v3 header layout changed");
+_Static_assert(sizeof(pc_rel_section_disk) == 8, "REL section layout changed");
 _Static_assert(sizeof(SampleMedium) == 4, "audio medium enum storage changed");
 _Static_assert(sizeof(AudioCacheType) == 4, "audio cache enum storage changed");
 _Static_assert(sizeof(FamicomSaveDataHeader) == FAMICOM_SAVE_HEADER_SIZE, "Famicom save header layout changed");
@@ -38,6 +44,8 @@ _Static_assert(offsetof(Save_t, private_data) == 0x20, "save player-data offset 
 _Static_assert(offsetof(Save_t, land_info) == 0x9120, "save land-info offset changed");
 _Static_assert(offsetof(Save_t, animals) == 0x17438, "save animal-data offset changed");
 _Static_assert(offsetof(Save_t, time_delta) == 0x22528, "save time-delta offset changed");
+_Static_assert(sizeof(Actor_data) == 0x10, "actor placement record layout changed");
+_Static_assert(sizeof(Scene_Word_u) > 8, "PC scene words must hold native pointers");
 
 int main(void) {
     MemcardGameHeader_t header = {0};

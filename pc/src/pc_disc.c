@@ -124,6 +124,7 @@ static u8* yaz0_decode(const u8* src, u32 src_size, u32* out_size) {
     if (src_size < 16 || memcmp(src, "Yaz0", 4) != 0) return NULL;
 
     dec_size = be32(src + 4);
+    if (dec_size == 0) return NULL;
     dst = (u8*)malloc(dec_size);
     if (!dst) return NULL;
 
@@ -148,6 +149,10 @@ static u8* yaz0_decode(const u8* src, u32 src_size, u32* out_size) {
                 } else {
                     len = (u32)(b1 >> 4) + 2;
                 }
+                if (dist >= dp) {
+                    free(dst);
+                    return NULL;
+                }
                 ref = dp - dist - 1;
                 while (len-- > 0 && dp < dec_size)
                     dst[dp++] = dst[ref++];
@@ -155,6 +160,10 @@ static u8* yaz0_decode(const u8* src, u32 src_size, u32* out_size) {
         }
     }
 
+    if (dp != dec_size) {
+        free(dst);
+        return NULL;
+    }
     *out_size = dec_size;
     return dst;
 }
@@ -179,16 +188,18 @@ static u32 gcm_dol_size_calc(DiscFile* df, u32 dol_off) {
     u32 max_end = 0;
     int i;
 
-    disc_read(df, dol_off, hdr, 0xE4);
+    if (!disc_read(df, dol_off, hdr, sizeof(hdr))) return 0;
 
     for (i = 0; i < 7; i++) {
         u32 off = be32(hdr + i * 4);
         u32 sz  = be32(hdr + 0x90 + i * 4);
+        if (off > UINT32_MAX - sz) return 0;
         if (off + sz > max_end) max_end = off + sz;
     }
     for (i = 0; i < 11; i++) {
         u32 off = be32(hdr + 0x1C + i * 4);
         u32 sz  = be32(hdr + 0xAC + i * 4);
+        if (off > UINT32_MAX - sz) return 0;
         if (off + sz > max_end) max_end = off + sz;
     }
     return max_end;
@@ -370,8 +381,9 @@ int pc_disc_read(u32 offset, void* dest, u32 size) {
     return disc_read(&g_disc, offset, dest, size);
 }
 
-u8* pc_disc_extract_dol(void) {
+u8* pc_disc_extract_dol(size_t* out_size) {
     u8* buf;
+    if (out_size) *out_size = 0;
     if (!g_disc_open) return NULL;
     buf = (u8*)malloc(g_dol_size);
     if (!buf) return NULL;
@@ -381,13 +393,15 @@ u8* pc_disc_extract_dol(void) {
     }
     if (g_pc_verbose)
         printf("[PC] DOL: %u bytes (offset 0x%X)\n", g_dol_size, g_dol_offset);
+    if (out_size) *out_size = g_dol_size;
     return buf;
 }
 
-u8* pc_disc_extract_rel(void) {
+u8* pc_disc_extract_rel(size_t* out_size) {
     u32 off, sz;
     u8* raw;
 
+    if (out_size) *out_size = 0;
     if (!pc_disc_find_file("foresta.rel.szs", &off, &sz)) {
         if (g_pc_verbose) printf("[PC] foresta.rel.szs not found in disc FST\n");
         return NULL;
@@ -411,10 +425,12 @@ u8* pc_disc_extract_rel(void) {
         }
         if (g_pc_verbose)
             printf("[PC] REL: %u bytes (Yaz0: %u -> %u)\n", dec_sz, sz, dec_sz);
+        if (out_size) *out_size = dec_sz;
         return dec;
     }
 
     if (g_pc_verbose) printf("[PC] REL: %u bytes (raw)\n", sz);
+    if (out_size) *out_size = sz;
     return raw;
 }
 

@@ -297,6 +297,7 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_aram.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_audio_bank.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_rarc.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_executable.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_misc.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_mtx.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_m_card.c

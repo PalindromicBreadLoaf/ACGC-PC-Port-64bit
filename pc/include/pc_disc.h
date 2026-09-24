@@ -20,8 +20,8 @@ int pc_disc_find_file(const char* path, u32* disc_offset, u32* file_size);
 int pc_disc_read(u32 offset, void* dest, u32 size);
 
 /* Extract DOL and REL as malloc'd buffers (for pc_assets.c). */
-u8* pc_disc_extract_dol(void);
-u8* pc_disc_extract_rel(void); /* handles Yaz0 decompression */
+u8* pc_disc_extract_dol(size_t* out_size);
+u8* pc_disc_extract_rel(size_t* out_size); /* handles Yaz0 decompression */
 
 /* Close disc image and free resources. */
 void pc_disc_shutdown(void);
