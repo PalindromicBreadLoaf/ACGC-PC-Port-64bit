@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "types.h"
+#include "jaudio_NES/audiocommon.h"
 #include "PR/gbi.h"
 #include "PR/ultratypes.h"
 #include "TwoHeadArena.h"
@@ -13,6 +14,7 @@
 #include "dolphin/gx/GXStruct.h"
 #include "dolphin/mtx.h"
 #include "pc_portability.h"
+#include "pc_acmd_runtime.h"
 #include "pc_emu64_address.h"
 #include "pc_pointer_token.h"
 
@@ -178,6 +180,22 @@ static int test_gbi_pointer_tokens(void) {
           UINT32_C(0x03000000));
     pc_pointer_token_reset(PC_POINTER_TOKEN_DOMAIN_GBI);
     CHECK(pc_gbi_unpack_runtime_ptr(token, &resolved) == PC_POINTER_TOKEN_STALE);
+    return 0;
+}
+
+static int test_acmd_pointer_tokens(void) {
+    Acmd command;
+    uintptr_t pointer = UINT64_C(0x1234567887654321);
+    uintptr_t resolved = 0u;
+
+    pc_pointer_token_reset(PC_POINTER_TOKEN_DOMAIN_ACMD);
+    aLoadBuffer2(&command, pointer, 0x380, 16);
+    CHECK(pc_pointer_token_is_token(command.words.w1));
+    CHECK(pc_acmd_unpack_runtime_ptr(command.words.w1, &resolved) == PC_POINTER_TOKEN_OK);
+    CHECK(resolved == pointer);
+    CHECK((command.words.w0 >> 24) == A_CMD_LOADBUFFER2);
+    pc_pointer_token_reset(PC_POINTER_TOKEN_DOMAIN_ACMD);
+    CHECK(pc_acmd_unpack_runtime_ptr(command.words.w1, &resolved) == PC_POINTER_TOKEN_STALE);
     return 0;
 }
 
@@ -370,6 +388,7 @@ int main(void) {
     CHECK(test_pointer_tokens() == 0);
     CHECK(test_pointer_token_exhaustion() == 0);
     CHECK(test_gbi_pointer_tokens() == 0);
+    CHECK(test_acmd_pointer_tokens() == 0);
     CHECK(test_emu64_address_resolution() == 0);
     CHECK(test_static_gbi_relocations() == 0);
     CHECK(test_two_head_arena() == 0);

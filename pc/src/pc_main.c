@@ -36,15 +36,17 @@ int           g_pc_window_w = PC_SCREEN_WIDTH;
 int           g_pc_window_h = PC_SCREEN_HEIGHT;
 int           g_pc_widescreen_stretch = 0;
 
-void pc_platform_init(void) {
+static void pc_platform_init_with_flags(Uint32 sdl_flags) {
 #ifdef _WIN32
     SetProcessDPIAware();
     SDL_SetHint(SDL_HINT_WINDOWS_INTRESOURCE_ICON, "1");
 #endif
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_AUDIO | SDL_INIT_TIMER) < 0) {
+    if (g_pc_verbose) printf("[PC] Initializing SDL\n");
+    if (SDL_Init(sdl_flags) < 0) {
         fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
         exit(1);
     }
+    if (g_pc_verbose) printf("[PC] SDL initialized\n");
 
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
@@ -78,6 +80,7 @@ void pc_platform_init(void) {
         SDL_Quit();
         exit(1);
     }
+    if (g_pc_verbose) printf("[PC] SDL window created\n");
 
     g_pc_gl_context = SDL_GL_CreateContext(g_pc_window);
     if (!g_pc_gl_context) {
@@ -86,6 +89,7 @@ void pc_platform_init(void) {
         SDL_Quit();
         exit(1);
     }
+    if (g_pc_verbose) printf("[PC] OpenGL context created\n");
 
     if (!gladLoadGL((GLADloadfunc)SDL_GL_GetProcAddress)) {
         fprintf(stderr, "gladLoadGL failed\n");
@@ -94,6 +98,7 @@ void pc_platform_init(void) {
         SDL_Quit();
         exit(1);
     }
+    if (g_pc_verbose) printf("[PC] OpenGL entry points loaded\n");
 
     SDL_GL_SetSwapInterval(g_pc_settings.vsync);
 
@@ -105,13 +110,23 @@ void pc_platform_init(void) {
     }
 #endif
 
+    if (g_pc_verbose) printf("[PC] Initializing GX renderer\n");
     pc_gx_init();
+    if (g_pc_verbose) printf("[PC] GX renderer initialized\n");
     pc_texture_pack_init();
 #ifdef PC_ENHANCEMENTS
     if (g_pc_settings.preload_textures) {
         pc_texture_pack_preload_all();
     }
 #endif
+}
+
+void pc_platform_init(void) {
+    pc_platform_init_with_flags(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_AUDIO | SDL_INIT_TIMER);
+}
+
+void pc_platform_init_graphics(void) {
+    pc_platform_init_with_flags(SDL_INIT_VIDEO | SDL_INIT_TIMER);
 }
 
 extern void PADCleanup(void);
@@ -254,10 +269,13 @@ static int pc_parse_rain_intensity(const char* text) {
 }
 
 int main(int argc, char* argv[]) {
+    int graphics_smoke_test = 0;
+
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             printf("Usage: AnimalCrossing [options]\n");
             printf("  --verbose, -v       Enable diagnostic output\n");
+            printf("  --graphics-smoke-test  Initialize graphics and exit without game data\n");
             printf("  --no-framelimit     Alias for --framelimit 0 (uncapped)\n");
             printf("  --framelimit N      Set the target frame rate (default 60, 0 = uncapped)\n");
             printf("  --profile [N]       Print frame profiler summary every N frames (default 120)\n");
@@ -283,6 +301,9 @@ int main(int argc, char* argv[]) {
         } else if (strcmp(argv[i], "--uber-shader") == 0) {
             extern int g_pc_uber_shader_only;
             g_pc_uber_shader_only = 1;
+        } else if (strcmp(argv[i], "--graphics-smoke-test") == 0) {
+            graphics_smoke_test = 1;
+            g_pc_verbose = 1;
         } else if (strcmp(argv[i], "--verbose") == 0 || strcmp(argv[i], "-v") == 0) {
             g_pc_verbose = 1;
         } else if (strcmp(argv[i], "--profile") == 0) {
@@ -345,7 +366,38 @@ int main(int argc, char* argv[]) {
     SDL_SetMainReady();
     pc_settings_load();
     pc_keybindings_load();
-    pc_platform_init();
+    if (graphics_smoke_test) {
+        pc_platform_init_graphics();
+    } else {
+        pc_platform_init();
+    }
+    if (graphics_smoke_test) {
+        const GLubyte* vendor = glGetString(GL_VENDOR);
+        const GLubyte* renderer = glGetString(GL_RENDERER);
+        const GLubyte* version = glGetString(GL_VERSION);
+
+        printf("[PC] OpenGL vendor: %s\n", vendor ? (const char*)vendor : "unknown");
+        printf("[PC] OpenGL renderer: %s\n", renderer ? (const char*)renderer : "unknown");
+        printf("[PC] OpenGL version: %s\n", version ? (const char*)version : "unknown");
+
+        glViewport(0, 0, g_pc_window_w, g_pc_window_h);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        SDL_GL_SwapWindow(g_pc_window);
+        glFinish();
+
+        GLenum error = glGetError();
+        if (error != GL_NO_ERROR) {
+            fprintf(stderr, "[PC] Graphics smoke test failed with OpenGL error 0x%04x\n", error);
+            pc_platform_shutdown();
+            return 1;
+        }
+
+        printf("[PC] Graphics smoke test passed\n");
+        pc_platform_shutdown();
+        return 0;
+    }
+
     pc_disc_init();
     if (!pc_assets_init()) {
         const char* msg =

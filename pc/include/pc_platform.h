@@ -89,6 +89,7 @@ extern int g_pc_widescreen_stretch;
 
 /* --- Functions --- */
 void pc_platform_init(void);
+void pc_platform_init_graphics(void);
 void pc_platform_shutdown(void);
 void pc_platform_swap_buffers(void);
 int  pc_platform_poll_events(void);

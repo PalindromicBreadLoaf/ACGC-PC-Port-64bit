@@ -1804,7 +1804,11 @@ void Na_InitAudio(void (*fatal_callback)(), u8* load_addr, size_t load_size, u8*
     u32 unused = SetPreCopy_NeosRom(load_addr, load_size, cut_flag);
     Jac_RegisterDVDErrorCallback(Sou_DVD_Error);
     Jac_Start(audiomemory, sizeof(audiomemory), v);
+#ifdef TARGET_PC
+    BootSound(bootsound, bootsound_size);
+#else
     BootSound((u32)bootsound, bootsound_size);
+#endif
     sou_NeosBootCheck_ok = 1;
 }
 

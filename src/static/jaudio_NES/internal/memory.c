@@ -266,8 +266,24 @@ void Nas_HeapInit(ALHeap* heap, u8* p2, s32 p3) {
         heap->current = NULL;
         heap->last = NULL;
     } else {
+#ifdef TARGET_PC
+        uintptr_t base = (uintptr_t)p2;
+        uintptr_t aligned_base = (base + 31u) & ~(uintptr_t)31u;
+        uintptr_t alignment_size = aligned_base - base;
+
+        if (p3 <= 0 || alignment_size >= (uintptr_t)p3) {
+            heap->base = NULL;
+            heap->current = NULL;
+            heap->length = 0;
+            heap->last = NULL;
+            return;
+        }
+        length = p3 - (int)alignment_size;
+        heap->base = (u8*)aligned_base;
+#else
         length = p3 - ((u32)p2 & 0x1F);
         heap->base = (u8*)ALIGN_NEXT((u32)p2, 32);
+#endif
         heap->current = heap->base;
         heap->length = length;
         heap->last = NULL;
@@ -281,7 +297,7 @@ void Nas_HeapInit(ALHeap* heap, u8* p2, s32 p3) {
  */
 void Nas_SzStayClear(SZStay* p1) {
     p1->heap.current = p1->heap.base;
-    p1->heap.count = NULL;
+    p1->heap.count = 0;
     p1->num_entries = 0;
 }
 

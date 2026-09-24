@@ -9,7 +9,11 @@ extern "C" {
 #endif
 
 extern u32 Neos_Update(s16* dst);
+#ifdef TARGET_PC
+extern void ImageLoaded(uintptr_t param);
+#else
 extern void ImageLoaded(u32 param);
+#endif
 extern BOOL Neos_CheckBoot(void);
 extern void* neosproc(void* param);
 

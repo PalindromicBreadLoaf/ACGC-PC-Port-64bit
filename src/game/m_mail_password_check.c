@@ -170,7 +170,11 @@ static void mMpswd_bit_shift(u8* pswd, int shift) {
     memcpy(buf + 1, pswd + 2, (mMpswd_PASSWORD_DATA_LEN - 2));
 
     // this has to be a fakematch
+#ifdef TARGET_PC
+    bytes_shifted = ABS(shift);
+#else
     bytes_shifted = __abs(shift);
+#endif
     bytes_shifted /= 8; // degenerate code
     bits_shifted = ABS(shift) % 8;
 

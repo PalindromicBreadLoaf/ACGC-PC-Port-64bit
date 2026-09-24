@@ -18,6 +18,20 @@
       }
     },
     {
+      "name": "linux-x86_64-game-sanitize",
+      "displayName": "Linux x86-64 game with ASan and UBSan",
+      "inherits": "linux-x86_64-game",
+      "binaryDir": "${sourceDir}/build/linux-x86_64-game-sanitize",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+        "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
+        "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined"
+      }
+    },
+    {
       "name": "linux-x86_64-portability",
       "displayName": "Linux x86-64 portability checks",
       "generator": "Ninja",
@@ -34,6 +48,8 @@
       "inherits": "linux-x86_64-portability",
       "binaryDir": "${sourceDir}/build/linux-x86_64-portability-sanitize",
       "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++",
         "CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
         "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer",
         "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined"
@@ -44,6 +60,10 @@
     {
       "name": "linux-x86_64-game",
       "configurePreset": "linux-x86_64-game"
+    },
+    {
+      "name": "linux-x86_64-game-sanitize",
+      "configurePreset": "linux-x86_64-game-sanitize"
     },
     {
       "name": "linux-x86_64-portability",

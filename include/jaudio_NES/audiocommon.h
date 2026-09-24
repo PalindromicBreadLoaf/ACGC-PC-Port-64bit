@@ -97,7 +97,7 @@ extern "C" {
 	Acmd *_a = (Acmd *)pkt;						\
 									\
 	_a->words.w0 = _SHIFTL(A_CMD_LOADCACHE, 24, 8) | _SHIFTL((len) >> 4, 16, 8) | _SHIFTL(src, 0, 16);    		\
-	_a->words.w1 = (u32)(dst);		\
+	_a->words.w1 = _ACMD_PTR(dst);		\
 }
 
 #define	aLoadBuffer2(pkt, dst, src, len)						\
@@ -105,7 +105,7 @@ extern "C" {
 	Acmd *_a = (Acmd *)pkt;						\
 									\
 	_a->words.w0 = _SHIFTL(A_CMD_LOADBUFFER2, 24, 8) | _SHIFTL((len) >> 4, 16, 8) | _SHIFTL(src, 0, 16);    		\
-	_a->words.w1 = (u32)(dst);		\
+	_a->words.w1 = _ACMD_PTR(dst);		\
 }
 
 #define	aSaveBuffer2(pkt, dst, src, len)						\
@@ -113,7 +113,7 @@ extern "C" {
 	Acmd *_a = (Acmd *)pkt;						\
 									\
 	_a->words.w0 = _SHIFTL(A_CMD_SAVEBUFFER2, 24, 8) | _SHIFTL((len) >> 4, 16, 8) | _SHIFTL(src, 0, 16);    		\
-	_a->words.w1 = (u32)(dst);		\
+	_a->words.w1 = _ACMD_PTR(dst);		\
 }
 
 #define	aInterleave2(pkt, o, l, r, c)						\
@@ -137,7 +137,7 @@ extern "C" {
 	Acmd *_a = (Acmd *)pkt;						\
 									\
 	_a->words.w0 = _SHIFTL(A_CMD_PCM8DEC, 24, 8) | _SHIFTL(flags, 16, 8);    		\
-	_a->words.w1 = (u32)(state);		\
+	_a->words.w1 = _ACMD_PTR(state);		\
 }
 
 #define aDistFilter(pkt, gain, dmem_in, dmem_out, len)						\
@@ -163,7 +163,7 @@ extern "C" {
                                                                         \
         _a->words.w0 = _SHIFTL(A_CMD_FIRFILTER, 24, 8) | _SHIFTL(f, 16, 8) |   \
                     _SHIFTL(bufSize, 0, 16);                         \
-        _a->words.w1 = (unsigned int)(addr);                            \
+        _a->words.w1 = _ACMD_PTR(addr);                                 \
 }
 
 #define aFirLoadTable(pkt, size, addr) aFirFilter(pkt, 2, size, addr)

@@ -135,7 +135,13 @@ namespace std {
 typedef va_list __tag_va_List;
 }
 
-float fastcast_float(register unsigned char* s) {
+#ifdef TARGET_PC
+#define EMU64_REGISTER
+#else
+#define EMU64_REGISTER register
+#endif
+
+float fastcast_float(EMU64_REGISTER unsigned char* s) {
 #ifdef TARGET_PC
     return (float)(*s);
 #else
@@ -151,7 +157,7 @@ float fastcast_float(register unsigned char* s) {
 #endif
 }
 
-float fastcast_float(register unsigned short* s) {
+float fastcast_float(EMU64_REGISTER unsigned short* s) {
 #ifdef TARGET_PC
     return (float)(*s);
 #else
@@ -167,7 +173,7 @@ float fastcast_float(register unsigned short* s) {
 #endif
 }
 
-float fastcast_float(register signed char* s) {
+float fastcast_float(EMU64_REGISTER signed char* s) {
 #ifdef TARGET_PC
     return (float)(*s);
 #else
@@ -183,7 +189,7 @@ float fastcast_float(register signed char* s) {
 #endif
 }
 
-float fastcast_float(register short* s) {
+float fastcast_float(EMU64_REGISTER short* s) {
 #ifdef TARGET_PC
     return (float)(*s);
 #else
@@ -198,6 +204,8 @@ float fastcast_float(register short* s) {
     return f;
 #endif
 }
+
+#undef EMU64_REGISTER
 
 #define number(n) ARRAY_COUNT(n)
 

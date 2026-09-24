@@ -62,7 +62,7 @@ extern u32 Neos_Update(s16* dst) {
     return TRUE;
 }
 
-extern void ImageLoaded(u32 param) {
+extern void ImageLoaded(uintptr_t param) {
     /* On PC, DVD load is synchronous — this is called as the completion callback */
     (void)param;
 }

@@ -287,6 +287,7 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_gx_tev.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_gx_texture.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_gbi_runtime.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_acmd_runtime.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_pointer_token.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_emu64_address.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_os.c
@@ -438,6 +439,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     include(CheckPIESupported)
     check_pie_supported()
     set_property(TARGET ac_pc PROPERTY POSITION_INDEPENDENT_CODE TRUE)
+    target_link_options(ac_pc PRIVATE
+        "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/linux-symbols.map"
+    )
 endif()
 
 # Link SDL2 without SDL2main (we define SDL_MAIN_HANDLED)
