@@ -213,3 +213,21 @@ target_compile_options(pc_audio_bank_tests PRIVATE
 )
 
 add_test(NAME pc_audio_bank COMMAND pc_audio_bank_tests)
+
+add_executable(pc_asset_decode_tests
+    asset_decode_tests.c
+    ../src/pc_asset_decode.c
+)
+
+target_include_directories(pc_asset_decode_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+)
+
+target_compile_options(pc_asset_decode_tests PRIVATE
+    -Wall
+    -Wextra
+    -Werror
+    -Wconversion
+)
+
+add_test(NAME pc_asset_decode COMMAND pc_asset_decode_tests)

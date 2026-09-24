@@ -73,6 +73,7 @@ SWAP_NONE = 0
 SWAP_U16 = 1
 SWAP_VTX = 2
 SWAP_U32 = 3
+SWAP_GFX = 4
 
 # ROM sources
 SRC_REL = 0
@@ -86,6 +87,7 @@ def get_swap_type(elem_type):
     elif norm in ('u16', 's16'): return SWAP_U16
     elif norm == 'Vtx': return SWAP_VTX
     elif norm in ('u32', 's32'): return SWAP_U32
+    elif norm == 'Gfx': return SWAP_GFX
     return SWAP_NONE
 
 
@@ -843,6 +845,7 @@ def generate_pc_assets_c(central_entries, init_func_names, dry_run):
     lines.append('#include <string.h>')
     lines.append('#include "types.h"')
     lines.append('#include "PR/gbi.h"')
+    lines.append('#include "pc_asset_decode.h"')
     lines.append('#include "pc_assets.h"')
     lines.append('#include "pc_disc.h"')
     lines.append('#include "pc_executable.h"')
@@ -852,7 +855,7 @@ def generate_pc_assets_c(central_entries, init_func_names, dry_run):
 
     # ROM source enum
     lines.append('enum { SRC_REL = 0, SRC_DOL = 1, SRC_NONE = 2 };')
-    lines.append('enum { SWAP_NONE = 0, SWAP_U16 = 1, SWAP_VTX = 2, SWAP_U32 = 3 };')
+    lines.append('enum { SWAP_NONE = PC_ASSET_RAW, SWAP_U16 = PC_ASSET_BE16, SWAP_VTX = PC_ASSET_VTX_BE, SWAP_U32 = PC_ASSET_BE32, SWAP_GFX = PC_ASSET_GFX_BE };')
     lines.append('')
 
     # Global ROM data buffers
@@ -860,42 +863,6 @@ def generate_pc_assets_c(central_entries, init_func_names, dry_run):
     lines.append('static u8* g_dol_data = NULL;')
     lines.append('static size_t g_rel_size = 0;')
     lines.append('static size_t g_dol_size = 0;')
-    lines.append('')
-
-    # Byte-swap functions
-    lines.append('void pc_bswap_asset_u16(void* data, unsigned int size) {')
-    lines.append('    u16* p = (u16*)data;')
-    lines.append('    unsigned int i, count = size / 2;')
-    lines.append('    for (i = 0; i < count; i++) p[i] = (u16)((p[i] >> 8) | (p[i] << 8));')
-    lines.append('}')
-    lines.append('')
-    lines.append('void pc_bswap_asset_u32(void* data, unsigned int size) {')
-    lines.append('    u32* p = (u32*)data;')
-    lines.append('    unsigned int i, count = size / 4;')
-    lines.append('    for (i = 0; i < count; i++)')
-    lines.append('        p[i] = ((p[i]>>24)&0xFF)|((p[i]>>8)&0xFF00)|((p[i]<<8)&0xFF0000)|((p[i]<<24)&0xFF000000);')
-    lines.append('}')
-    lines.append('')
-    lines.append('void pc_bswap_asset_vtx(void* data, unsigned int size) {')
-    lines.append('    u8* p = (u8*)data;')
-    lines.append('    unsigned int i, count = size / 16;')
-    lines.append('    for (i = 0; i < count; i++) {')
-    lines.append('        int j;')
-    lines.append('        for (j = 0; j < 12; j += 2) { u8 t = p[j]; p[j] = p[j+1]; p[j+1] = t; }')
-    lines.append('        p += 16;')
-    lines.append('    }')
-    lines.append('}')
-    lines.append('')
-
-    # Swap dispatch
-    lines.append('static void do_swap(void* data, unsigned int size, int type) {')
-    lines.append('    switch (type) {')
-    lines.append('        case SWAP_U16: pc_bswap_asset_u16(data, size); break;')
-    lines.append('        case SWAP_VTX: pc_bswap_asset_vtx(data, size); break;')
-    lines.append('        case SWAP_U32: pc_bswap_asset_u32(data, size); break;')
-    lines.append('        default: break;')
-    lines.append('    }')
-    lines.append('}')
     lines.append('')
 
     # Load a file into malloc'd buffer
@@ -930,17 +897,22 @@ def generate_pc_assets_c(central_entries, init_func_names, dry_run):
     lines.append('        u8* rom = (rom_src == SRC_REL) ? g_rel_data : g_dol_data;')
     lines.append('        size_t rom_size = (rom_src == SRC_REL) ? g_rel_size : g_dol_size;')
     lines.append('        if (rom && (size_t)rom_off <= rom_size && (size_t)size <= rom_size - (size_t)rom_off) {')
-    lines.append('            memcpy(dest, rom + rom_off, size);')
-    lines.append('            loaded = 1;')
+    lines.append('            loaded = pc_asset_decode(dest, size, rom + rom_off, size, (pc_asset_format)swap_type);')
     lines.append('        }')
     lines.append('    }')
     lines.append('    /* Fallback to .bin file */')
     lines.append('    if (!loaded && bin_path) {')
     lines.append('        FILE* f = fopen(bin_path, "rb");')
-    lines.append('        if (f) { loaded = fread(dest, 1, size, f) == size; fclose(f); }')
+    lines.append('        if (f) {')
+    lines.append('            u8* encoded = (u8*)malloc(size);')
+    lines.append('            if (encoded != NULL && fread(encoded, 1, size, f) == size) {')
+    lines.append('                loaded = pc_asset_decode(dest, size, encoded, size, (pc_asset_format)swap_type);')
+    lines.append('            }')
+    lines.append('            free(encoded);')
+    lines.append('            fclose(f);')
+    lines.append('        }')
     lines.append('    }')
-    lines.append('    if (!loaded) fprintf(stderr, "[PC] ASSET MISSING: %s\\n", bin_path ? bin_path : "(rom)");')
-    lines.append('    if (loaded) do_swap(dest, size, swap_type);')
+    lines.append('    if (!loaded) fprintf(stderr, "[PC] ASSET MISSING OR INVALID: %s\\n", bin_path ? bin_path : "(rom)");')
     lines.append('}')
     lines.append('')
 
@@ -1058,9 +1030,8 @@ def generate_pc_assets_h(dry_run):
         '\n'
         'void pc_load_asset(const char* bin_path, void* dest, unsigned int size,\n'
         '                   unsigned int rom_off, int rom_src, int swap_type);\n'
-        'void pc_bswap_asset_u16(void* data, unsigned int size);\n'
-        'void pc_bswap_asset_u32(void* data, unsigned int size);\n'
-        'void pc_bswap_asset_vtx(void* data, unsigned int size);\n'
+        'void pc_assets_pal_n64_to_gc(unsigned short* pal, int count);\n'
+        '/* Returns 1 when ROM data is found, 0 otherwise. */\n'
         'int pc_assets_init(void);\n'
         '\n'
         '#endif /* PC_ASSETS_H */\n'

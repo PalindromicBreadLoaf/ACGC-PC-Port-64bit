@@ -5,6 +5,7 @@
 #include <string.h>
 #include "types.h"
 #include "PR/gbi.h"
+#include "pc_asset_decode.h"
 #include "pc_assets.h"
 #include "pc_disc.h"
 #include "pc_executable.h"
@@ -12,35 +13,12 @@
 extern int g_pc_verbose;
 
 enum { SRC_REL = 0, SRC_DOL = 1, SRC_NONE = 2 };
-enum { SWAP_NONE = 0, SWAP_U16 = 1, SWAP_VTX = 2, SWAP_U32 = 3 };
+enum { SWAP_NONE = PC_ASSET_RAW, SWAP_U16 = PC_ASSET_BE16, SWAP_VTX = PC_ASSET_VTX_BE, SWAP_U32 = PC_ASSET_BE32, SWAP_GFX = PC_ASSET_GFX_BE };
 
 static u8* g_rel_data = NULL;
 static u8* g_dol_data = NULL;
 static size_t g_rel_size = 0;
 static size_t g_dol_size = 0;
-
-void pc_bswap_asset_u16(void* data, unsigned int size) {
-    u16* p = (u16*)data;
-    unsigned int i, count = size / 2;
-    for (i = 0; i < count; i++) p[i] = (u16)((p[i] >> 8) | (p[i] << 8));
-}
-
-void pc_bswap_asset_u32(void* data, unsigned int size) {
-    u32* p = (u32*)data;
-    unsigned int i, count = size / 4;
-    for (i = 0; i < count; i++)
-        p[i] = ((p[i]>>24)&0xFF)|((p[i]>>8)&0xFF00)|((p[i]<<8)&0xFF0000)|((p[i]<<24)&0xFF000000);
-}
-
-void pc_bswap_asset_vtx(void* data, unsigned int size) {
-    u8* p = (u8*)data;
-    unsigned int i, count = size / 16;
-    for (i = 0; i < count; i++) {
-        int j;
-        for (j = 0; j < 12; j += 2) { u8 t = p[j]; p[j] = p[j+1]; p[j+1] = t; }
-        p += 16;
-    }
-}
 
 /* Convert N64 RGBA5551 palette to GC RGB5A3 in-place.
  * Use after pc_load_asset for palettes shared between N64-path (gsDPLoadTLUTCmd)
@@ -55,15 +33,6 @@ void pc_assets_pal_n64_to_gc(u16* pal, int count) {
         } else { /* transparent: repack as ARGB3444 */
             pal[i] = (u16)(((v >> 4) & 0xFF00) | ((v >> 3) & 0xF0) | ((v >> 2) & 0x0F));
         }
-    }
-}
-
-static void do_swap(void* data, unsigned int size, int type) {
-    switch (type) {
-        case SWAP_U16: pc_bswap_asset_u16(data, size); break;
-        case SWAP_VTX: pc_bswap_asset_vtx(data, size); break;
-        case SWAP_U32: pc_bswap_asset_u32(data, size); break;
-        default: break;
     }
 }
 
@@ -96,17 +65,22 @@ void pc_load_asset(const char* bin_path, void* dest, unsigned int size,
         u8* rom = (rom_src == SRC_REL) ? g_rel_data : g_dol_data;
         size_t rom_size = (rom_src == SRC_REL) ? g_rel_size : g_dol_size;
         if (rom && (size_t)rom_off <= rom_size && (size_t)size <= rom_size - (size_t)rom_off) {
-            memcpy(dest, rom + rom_off, size);
-            loaded = 1;
+            loaded = pc_asset_decode(dest, size, rom + rom_off, size, (pc_asset_format)swap_type);
         }
     }
     /* Fallback to .bin file */
     if (!loaded && bin_path) {
         FILE* f = fopen(bin_path, "rb");
-        if (f) { loaded = fread(dest, 1, size, f) == size; fclose(f); }
+        if (f) {
+            u8* encoded = (u8*)malloc(size);
+            if (encoded != NULL && fread(encoded, 1, size, f) == size) {
+                loaded = pc_asset_decode(dest, size, encoded, size, (pc_asset_format)swap_type);
+            }
+            free(encoded);
+            fclose(f);
+        }
     }
-    if (!loaded) fprintf(stderr, "[PC] ASSET MISSING: %s\n", bin_path ? bin_path : "(rom)");
-    if (loaded) do_swap(dest, size, swap_type);
+    if (!loaded) fprintf(stderr, "[PC] ASSET MISSING OR INVALID: %s\n", bin_path ? bin_path : "(rom)");
 }
 
 /* Extern declarations */

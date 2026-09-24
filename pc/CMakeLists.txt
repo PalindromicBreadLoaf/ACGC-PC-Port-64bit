@@ -315,6 +315,7 @@ set(PC_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_stubs.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_stubs_cpp.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_assets.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_asset_decode.c
     ${CMAKE_CURRENT_SOURCE_DIR}/src/pc_disc.c
 )
 
