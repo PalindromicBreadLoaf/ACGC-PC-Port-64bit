@@ -12,6 +12,7 @@
 #include <dolphin/os.h>
 #ifdef TARGET_PC
 #include <dolphin/ar.h>
+#include "pc_audio_bank.h"
 #endif
 
 #define MK_BGLOAD_MSG(retData, tableType, id, loadStatus) \
@@ -34,6 +35,7 @@ typedef struct PcArcRuntimeTable {
 } PcArcRuntimeTable;
 
 static PcArcRuntimeTable pc_arc_tables[PC_ARC_TABLE_COUNT];
+static pc_audio_bank_runtime pc_audio_banks[PC_ARC_ENTRY_COUNT];
 
 static PcArcRuntimeTable* pc_find_arc_table(ArcHeader* header) {
     s32 i;
@@ -1147,6 +1149,35 @@ static ArcHeader* __Get_ArcHeader(s32 table_type) {
 #define BANK_ENTRY(ctrl, idx) (((u32*)(ctrl)) + (idx))
 
 static void Nas_BankOfsToAddr_Inner(s32 bank_id, u8* ctrl_p, WaveMedia* wave_media) {
+#ifdef TARGET_PC
+    pc_audio_bank_runtime* runtime;
+    pc_audio_wave_media media;
+    size_t i;
+    size_t bank_size;
+
+    if (bank_id < 0 || bank_id >= ARRAY_COUNT(pc_audio_banks)) {
+        OSPanic(__FILE__, __LINE__, "audio bank index out of range");
+        return;
+    }
+    runtime = &pc_audio_banks[bank_id];
+    pc_audio_bank_destroy(runtime);
+    media.wave0_base = wave_media->wave0_p;
+    media.wave1_base = wave_media->wave1_p;
+    media.wave0_medium = wave_media->wave0_media;
+    media.wave1_medium = wave_media->wave1_media;
+    bank_size = (size_t)AG.bank_header->entries[bank_id].size;
+    if (!pc_audio_bank_decode(runtime, ctrl_p, bank_size, AG.voice_info[bank_id].num_instruments,
+                              AG.voice_info[bank_id].num_drums, AG.voice_info[bank_id].num_sfx, &media)) {
+        OSPanic(__FILE__, __LINE__, "invalid audio bank data");
+        return;
+    }
+    AG.voice_info[bank_id].instruments = runtime->instruments;
+    AG.voice_info[bank_id].percussion = runtime->percussion;
+    AG.voice_info[bank_id].effects = runtime->effects;
+    for (i = 0; i < runtime->preload_wavetable_count && AG.num_used_samples < ARRAY_COUNT(AG.used_samples); ++i) {
+        AG.used_samples[AG.num_used_samples++] = runtime->preload_wavetables[i];
+    }
+#else
     u32 ofs;
     uintptr_t inst_ofs;
     voicetable* inst;
@@ -1276,6 +1307,7 @@ static void Nas_BankOfsToAddr_Inner(s32 bank_id, u8* ctrl_p, WaveMedia* wave_med
     AG.voice_info[bank_id].percussion = (perctable**)*BANK_ENTRY(ctrl_p, 0);
     AG.voice_info[bank_id].effects = (percvoicetable*)*BANK_ENTRY(ctrl_p, 1);
     AG.voice_info[bank_id].instruments = (voicetable**)BANK_ENTRY(ctrl_p, 2);
+#endif
 }
 
 #undef OFS2RAM

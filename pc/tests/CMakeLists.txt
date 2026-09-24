@@ -173,3 +173,25 @@ target_compile_options(pc_rarc_tests PRIVATE
 )
 
 add_test(NAME pc_rarc COMMAND pc_rarc_tests)
+
+add_executable(pc_audio_bank_tests
+    audio_bank_tests.c
+    ../src/pc_audio_bank.c
+)
+
+target_include_directories(pc_audio_bank_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+)
+
+target_compile_definitions(pc_audio_bank_tests PRIVATE TARGET_PC _LANGUAGE_C F3DEX_GBI_2 PC_GBI_LAYOUT_TEST)
+target_compile_options(pc_audio_bank_tests PRIVATE
+    -Wall
+    -Wextra
+    -Werror
+    -Wconversion
+    -Wno-comment
+    -Wno-multichar
+)
+
+add_test(NAME pc_audio_bank COMMAND pc_audio_bank_tests)

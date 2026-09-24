@@ -3,6 +3,7 @@
 #include "Famicom/famicom.h"
 #include "dolphin/dvd.h"
 #include "jaudio_NES/audiostruct.h"
+#include "pc_audio_bank.h"
 #include "m_common_data.h"
 #include "m_scene.h"
 
@@ -13,6 +14,13 @@ _Static_assert(offsetof(ArcEntry, param2) == 14, "ArcEntry field offsets changed
 _Static_assert(sizeof(adpcmloop) == 48, "ADPCM loop layout changed");
 _Static_assert(offsetof(adpcmloop, predictor_state) == 16, "ADPCM loop field offsets changed");
 _Static_assert(sizeof(adpcmbook) == 8, "ADPCM book header layout changed");
+_Static_assert(sizeof(pc_audio_wtstr_disk) == 8, "audio wtstr disk layout changed");
+_Static_assert(sizeof(pc_audio_voicetable_disk) == 32, "audio voice disk layout changed");
+_Static_assert(sizeof(pc_audio_perctable_disk) == 16, "audio percussion disk layout changed");
+_Static_assert(sizeof(pc_audio_wavetable_disk) == 16, "audio wavetable disk layout changed");
+_Static_assert(sizeof(pc_audio_loop_disk) == 16, "audio loop disk layout changed");
+_Static_assert(sizeof(pc_audio_book_disk) == 8, "audio book disk layout changed");
+_Static_assert(sizeof(pc_audio_env_disk) == 4, "audio envelope disk layout changed");
 _Static_assert(sizeof(SampleMedium) == 4, "audio medium enum storage changed");
 _Static_assert(sizeof(AudioCacheType) == 4, "audio cache enum storage changed");
 _Static_assert(sizeof(FamicomSaveDataHeader) == FAMICOM_SAVE_HEADER_SIZE, "Famicom save header layout changed");
