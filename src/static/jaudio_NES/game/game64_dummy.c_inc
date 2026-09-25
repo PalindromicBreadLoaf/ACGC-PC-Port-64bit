@@ -217,7 +217,11 @@ void BootSound(u32 a, u32 b) {
     bootsound_size = b;
     Bank_Init();
     Wavegroup_Init();
+#ifdef TARGET_PC
+    int unused1 = Wavegroup_RegistSized(NIN_WAVE, sizeof(NIN_WAVE), 0);
+#else
     int unused1 = Wavegroup_Regist(NIN_WAVE, 0);
+#endif
     int unused2 = Bank_Regist(NIN_BANK, 0);
     Jac_RegisterARAMCallback(dummy_callback);
     int unused3 = WaveScene_Set(0, 0);

@@ -4,6 +4,7 @@
 #include "dolphin/dvd.h"
 #include "jaudio_NES/audiostruct.h"
 #include "pc_audio_bank.h"
+#include "pc_audio_wsys.h"
 #include "pc_executable.h"
 #include "m_common_data.h"
 #include "m_scene.h"
@@ -22,6 +23,14 @@ _Static_assert(sizeof(pc_audio_wavetable_disk) == 16, "audio wavetable disk layo
 _Static_assert(sizeof(pc_audio_loop_disk) == 16, "audio loop disk layout changed");
 _Static_assert(sizeof(pc_audio_book_disk) == 8, "audio book disk layout changed");
 _Static_assert(sizeof(pc_audio_env_disk) == 4, "audio envelope disk layout changed");
+_Static_assert(sizeof(pc_audio_wsys_disk) == 24, "audio WSYS disk layout changed");
+_Static_assert(sizeof(pc_audio_wsys_archive_bank_disk) == 8, "audio WINF disk layout changed");
+_Static_assert(sizeof(pc_audio_wsys_control_group_disk) == 12, "audio WBCT disk layout changed");
+_Static_assert(sizeof(pc_audio_wsys_scene_disk) == 24, "audio SCNE disk layout changed");
+_Static_assert(sizeof(pc_audio_wsys_control_disk) == 8, "audio control disk layout changed");
+_Static_assert(sizeof(pc_audio_wsys_wave_id_disk) == 56, "audio wave ID disk layout changed");
+_Static_assert(sizeof(pc_audio_wsys_archive_disk) == 116, "audio archive disk layout changed");
+_Static_assert(sizeof(pc_audio_wsys_wave_disk) == 40, "audio wave disk layout changed");
 _Static_assert(sizeof(pc_dol_header_disk) == 0x100, "DOL header layout changed");
 _Static_assert(sizeof(pc_rel_header_v1_disk) == 0x40, "REL v1 header layout changed");
 _Static_assert(sizeof(pc_rel_header_v2_disk) == 0x48, "REL v2 header layout changed");

@@ -215,6 +215,28 @@ target_compile_options(pc_audio_bank_tests PRIVATE
 
 add_test(NAME pc_audio_bank COMMAND pc_audio_bank_tests)
 
+add_executable(pc_audio_wsys_tests
+    audio_wsys_tests.c
+    ../src/pc_audio_wsys.c
+)
+
+target_include_directories(pc_audio_wsys_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../include
+    ${CMAKE_CURRENT_SOURCE_DIR}/../include
+)
+
+target_compile_definitions(pc_audio_wsys_tests PRIVATE TARGET_PC _LANGUAGE_C F3DEX_GBI_2 PC_GBI_LAYOUT_TEST)
+target_compile_options(pc_audio_wsys_tests PRIVATE
+    -Wall
+    -Wextra
+    -Werror
+    -Wconversion
+    -Wno-comment
+    -Wno-multichar
+)
+
+add_test(NAME pc_audio_wsys COMMAND pc_audio_wsys_tests)
+
 add_executable(pc_asset_decode_tests
     asset_decode_tests.c
     ../src/pc_asset_decode.c
