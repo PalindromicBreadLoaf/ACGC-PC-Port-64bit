@@ -53,7 +53,7 @@ int pc_gbi_relocate_static_command(void* command) {
 
     memcpy(&value, words + 2, sizeof(value));
     if (words[1] == UINT32_C(0xfc000000) && !pc_gbi_is_segmented(value)) {
-        result = pc_pointer_token_pack(PC_POINTER_TOKEN_DOMAIN_GBI, value, &packed);
+        result = pc_pointer_token_pack_permanent(PC_POINTER_TOKEN_DOMAIN_GBI, value, &packed);
     } else if (value > UINT32_MAX || pc_pointer_token_is_token((uint32_t)value)) {
         result = PC_POINTER_TOKEN_INVALID_DOMAIN;
     } else {

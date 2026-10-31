@@ -21,7 +21,8 @@ typedef enum pc_pointer_token_result {
     PC_POINTER_TOKEN_EXHAUSTED
 } pc_pointer_token_result;
 
-#define PC_POINTER_TOKEN_CAPACITY 8192u
+/* Must be a power of two. */
+#define PC_POINTER_TOKEN_CAPACITY 65536u
 #define PC_POINTER_TOKEN_NAMESPACE_MASK UINT32_C(0xF0000000)
 #define PC_POINTER_TOKEN_NAMESPACE UINT32_C(0xF0000000)
 
@@ -29,6 +30,8 @@ int pc_pointer_token_is_token(uint32_t value);
 const char* pc_pointer_token_result_name(pc_pointer_token_result result);
 pc_pointer_token_result pc_pointer_token_pack(pc_pointer_token_domain domain, uintptr_t pointer,
                                               uint32_t* token_out);
+pc_pointer_token_result pc_pointer_token_pack_permanent(pc_pointer_token_domain domain, uintptr_t pointer,
+                                                        uint32_t* token_out);
 pc_pointer_token_result pc_pointer_token_resolve(pc_pointer_token_domain domain, uint32_t token,
                                                  uintptr_t* pointer_out);
 pc_pointer_token_result pc_pointer_token_release(pc_pointer_token_domain domain, uint32_t token);
