@@ -10,6 +10,7 @@
 #define RUMBLE_DURATION_MS  200
 
 static SDL_GameController* g_controller = NULL;
+static int g_rumble_on = 0;
 
 /* deadzone percent (0-40) -> raw SDL axis threshold */
 static int deadzone_threshold(int percent) {
@@ -175,6 +176,12 @@ u32 PADRead(PADStatus* status) {
         }
     }
 
+    /* GC motors run until told to stop, but the game only sends state changes.
+     * Renewing a short effect keeps it going without outliving a hung game. */
+    if (g_controller && g_rumble_on) {
+        SDL_GameControllerRumble(g_controller, 0xFFFF, 0xFFFF, RUMBLE_DURATION_MS);
+    }
+
     status[0].button = buttons;
     status[0].stickX = stickX;
     status[0].stickY = stickY;
@@ -186,6 +193,9 @@ u32 PADRead(PADStatus* status) {
 }
 
 void PADControlMotor(s32 chan, u32 command) {
+    if (chan == 0) {
+        g_rumble_on = (command == 1);
+    }
     if (g_controller && chan == 0) {
         u16 intensity = (command == 1) ? 0xFFFF : 0;
         SDL_GameControllerRumble(g_controller, intensity, intensity, RUMBLE_DURATION_MS);
