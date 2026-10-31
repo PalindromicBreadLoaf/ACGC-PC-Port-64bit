@@ -183,6 +183,10 @@ void aWeatherRain_draw(aWeather_Priv* priv, GAME* game) {
         graph = play->game.graph;
 
         disp = disp >> 1;
+        /* timer is a float since delta time: a tiny positive value rounds 8 - timer up to 8. */
+        if (disp >= (s16)ARRAY_COUNT(aWeather_rain_picha_disp)) {
+            disp = ARRAY_COUNT(aWeather_rain_picha_disp) - 1;
+        }
 
         Matrix_translate(pos.x, pos.y, pos.z, MTX_LOAD);
         Matrix_mult(&play->billboard_matrix, MTX_MULT);

@@ -222,6 +222,11 @@ struct actor_structure_s {
     /* 0x2D4 */ f32 arg3_f;
 
     /* 0x2D8 */ u32 season;
+
+#ifdef TARGET_PC
+    /* Holds the pointers that structure actors keep in an int arg on GameCube. */
+    void* arg_p;
+#endif
 };
 
 typedef struct actor_overlay_info_s {

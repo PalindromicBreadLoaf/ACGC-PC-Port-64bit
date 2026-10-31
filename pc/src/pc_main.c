@@ -25,6 +25,8 @@ int           g_pc_frame_limit_override = -1;
 int           g_pc_speedhack_enabled = 0;
 int           g_pc_verbose = 0;
 int           g_pc_time_override = -1; /* -1=system clock, 0-23=override hour */
+int           g_pc_force_weather = -1; /* -1=game decides, otherwise mEnv_WEATHER_* */
+int           g_pc_auto_start = 0;     /* 1=press A automatically, for unattended testing */
 int           g_pc_min_override = -1; /* -1=system clock, 0-59=override minute */
 int           g_pc_sec_override = -1; /* -1=system clock, 0-59=override second */
 int           g_pc_date_month = -1; /* -1=system clock, 1-12=override month */
@@ -319,6 +321,14 @@ int main(int argc, char* argv[]) {
                 g_pc_model_viewer_start = atoi(argv[i + 1]);
                 i++;
             }
+        } else if (strcmp(argv[i], "--auto-start") == 0) {
+            g_pc_auto_start = 1;
+        } else if (strcmp(argv[i], "--weather") == 0 && i + 1 < argc) {
+            static const char* const weather_names[] = { "clear", "rain", "snow", "sakura", "leaves" };
+            for (int w = 0; w < 5; w++) {
+                if (strcmp(argv[i + 1], weather_names[w]) == 0) g_pc_force_weather = w;
+            }
+            i++;
         } else if (strcmp(argv[i], "--time") == 0 && i + 1 < argc) {
             int h = -1, m = -1, s = -1;
             sscanf(argv[i + 1], "%d:%d:%d", &h, &m, &s);

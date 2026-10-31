@@ -81,16 +81,15 @@ static bool pcArchiveAlignSize(size_t* value, size_t alignment) {
 
 bool JKRArchive::setPcArchiveMetadata(const void* data, size_t size, bool requireFileData) {
     pc_rarc_view view;
-    size_t directoryOffset = sizeof(SArcDataInfo);
-    size_t fileOffset;
+    const size_t directoryOffset = sizeof(SArcDataInfo);
+    size_t fileOffset = directoryOffset;
     size_t stringOffset;
     size_t total;
 
     if ((requireFileData ? pc_rarc_open(&view, data, size) : pc_rarc_open_metadata(&view, data, size)) == false ||
-        !pcArchiveAddSize(&directoryOffset, view.info.node_count, sizeof(SDIDirEntry))) {
+        !pcArchiveAddSize(&fileOffset, view.info.node_count, sizeof(SDIDirEntry))) {
         return false;
     }
-    fileOffset = directoryOffset;
     if (!pcArchiveAlignSize(&fileOffset, alignof(SDIFileEntry))) {
         return false;
     }

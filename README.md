@@ -88,6 +88,8 @@ SDL2 game controllers are supported with automatic hotplug detection. Button map
 | `--verbose` | Enable diagnostic logging |
 | `--no-framelimit` | Disable frame limiter (unlocked FPS) |
 | `--model-viewer [index]` | Launch debug model viewer (structures, NPCs, fish) |
+| `--auto-start` | Press A automatically about twice a second, to get past menus unattended (debugging) |
+| `--weather TYPE` | Force weather: `clear`, `rain`, `snow`, `sakura`, `leaves` (debugging) |
 | `--time HOUR` | Override in-game hour (0-23) |
 
 ## Settings

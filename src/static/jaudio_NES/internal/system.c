@@ -2405,22 +2405,23 @@ s32 Nas_BankOfsToAddr(s32 bank_id, u8* ctrl_p, WaveMedia* wave_media, s32 async)
 s32 Nas_CheckBgWave(s32 reset_status) {
     smzwavetable* wavetable;
     Bgloadreq* preload;
+    OSMesg mesg;
     u32 preload_idx;
     jaudio_runtime_addr_t key;
     s32 n_chunks;
 
     if (AG.num_requested_samples > 0) {
         if (reset_status != 0) {
-            Z_osRecvMesg(&AG.preload_sample_queue, (OSMesg*)&preload_idx, OS_MESG_NOBLOCK);
+            Z_osRecvMesg(&AG.preload_sample_queue, &mesg, OS_MESG_NOBLOCK);
             AG.num_requested_samples = 0;
             return FALSE;
         }
 
-        if (Z_osRecvMesg(&AG.preload_sample_queue, (OSMesg*)&preload_idx, OS_MESG_NOBLOCK) == -1) {
+        if (Z_osRecvMesg(&AG.preload_sample_queue, &mesg, OS_MESG_NOBLOCK) == -1) {
             return FALSE;
         }
 
-        preload_idx >>= 24;
+        preload_idx = (u32)(uintptr_t)mesg >> 24;
         preload = &AG.requested_samples[preload_idx];
 
         if (!preload->is_free) {
@@ -2668,11 +2669,11 @@ void MK_load(s32 table_type, s32 id, u8* done_p) {
 
 void MK_FrameWork(void) {
     s32 idx;
-    u32 ret;
+    OSMesg mesg;
     u8* rmes;
 
-    if (Z_osRecvMesg(&MK_QUEUE, (OSMesg*)&ret, OS_MESG_NOBLOCK) != -1) {
-        idx = ret >> 24;
+    if (Z_osRecvMesg(&MK_QUEUE, &mesg, OS_MESG_NOBLOCK) != -1) {
+        idx = (u32)(uintptr_t)mesg >> 24;
         rmes = MK_RMES[idx];
         if (rmes != NULL) {
             *rmes = 0;

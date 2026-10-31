@@ -464,6 +464,18 @@ static void Weather_Actor_ct(ACTOR* actor, GAME* game) {
     }
 
 #ifdef TARGET_PC
+    {
+        extern int g_pc_force_weather;
+        if (g_pc_force_weather >= 0) {
+            weather->current_status = g_pc_force_weather;
+            weather->next_status = g_pc_force_weather;
+            weather->current_level = mEnv_WEATHER_INTENSITY_NORMAL;
+            weather->current_aim_level = mEnv_WEATHER_INTENSITY_NORMAL;
+        }
+    }
+#endif
+
+#ifdef TARGET_PC
     aWeather_ApplyPcOverride(weather);
 #endif
 

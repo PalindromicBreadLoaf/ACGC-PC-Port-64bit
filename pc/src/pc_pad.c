@@ -164,6 +164,17 @@ u32 PADRead(PADStatus* status) {
         status[0].triggerRight = pad_trigger_value(pb->r);
     }
 
+    if (g_pc_auto_start) {
+        static u32 auto_press_ticks = 0;
+        u32 tick = auto_press_ticks++;
+
+        /* Short pulses, since menus act on the button's press edge. In the text
+         * editor A only enters letters, so every fourth pulse confirms with Start. */
+        if ((tick % 30u) < 3u) {
+            buttons |= (g_pc_editor_active && (tick / 30u) % 4u == 3u) ? PAD_BUTTON_START : PAD_BUTTON_A;
+        }
+    }
+
     status[0].button = buttons;
     status[0].stickX = stickX;
     status[0].stickY = stickY;
