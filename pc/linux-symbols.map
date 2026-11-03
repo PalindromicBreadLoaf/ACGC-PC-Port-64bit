@@ -1,0 +1,6 @@
+/* Linker version script for the Linux build (see pc/CMakeLists.txt).
+ * The decompiled game defines functions with libc/libm names; keeping every
+ * symbol local stops shared libraries (SDL2, Mesa, PipeWire) binding to them. */
+{
+  local: *;
+};
