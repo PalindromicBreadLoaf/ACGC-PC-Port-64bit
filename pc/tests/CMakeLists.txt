@@ -71,7 +71,11 @@ target_compile_options(pc_allocator_cpp_tests PRIVATE
     -ffunction-sections
     -fdata-sections
 )
-target_link_options(pc_allocator_cpp_tests PRIVATE -Wl,--gc-sections)
+if(APPLE)
+    target_link_options(pc_allocator_cpp_tests PRIVATE -Wl,-dead_strip)
+else()
+    target_link_options(pc_allocator_cpp_tests PRIVATE -Wl,--gc-sections)
+endif()
 
 add_test(NAME pc_allocator_cpp COMMAND pc_allocator_cpp_tests)
 

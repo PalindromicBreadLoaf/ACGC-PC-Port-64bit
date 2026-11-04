@@ -7,6 +7,7 @@
 #include <ctype.h>
 #include <dirent.h>
 #include "types.h"
+#include <SDL.h>
 #include "pc_disc.h"
 
 extern int g_pc_verbose;
@@ -323,12 +324,17 @@ static int find_disc_image(char* out_path, int out_sz) {
 
 /* ---- public API ---- */
 
+/* The audio thread reads the disc alongside the main thread, and each read is a
+ * seek followed by a read on one shared FILE*. */
+static SDL_mutex* g_disc_mutex = NULL;
+
 int pc_disc_init(void) {
     char path[512];
 
     if (g_disc_open) return 1;
     if (!find_disc_image(path, sizeof(path))) return 0;
     if (!disc_open(&g_disc, path)) return 0;
+    if (g_disc_mutex == NULL) g_disc_mutex = SDL_CreateMutex();
 
     if (!gcm_verify(&g_disc)) {
         if (g_pc_verbose) printf("[PC] %s: not a valid GC disc image\n", path);
@@ -377,8 +383,13 @@ int pc_disc_find_file(const char* path, u32* disc_offset, u32* file_size) {
 }
 
 int pc_disc_read(u32 offset, void* dest, u32 size) {
+    int result;
+
     if (!g_disc_open) return 0;
-    return disc_read(&g_disc, offset, dest, size);
+    SDL_LockMutex(g_disc_mutex);
+    result = disc_read(&g_disc, offset, dest, size);
+    SDL_UnlockMutex(g_disc_mutex);
+    return result;
 }
 
 u8* pc_disc_extract_dol(size_t* out_size) {

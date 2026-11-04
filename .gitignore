@@ -17,10 +17,12 @@ orig/*/*
 *.o
 *.map
 *.MAP
+!pc/linux-symbols.map
 
 # Build files
 build/
 build32/
+build-macos/
 .ninja_*
 build.ninja
 

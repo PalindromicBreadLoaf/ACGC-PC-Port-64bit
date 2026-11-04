@@ -2424,7 +2424,7 @@ _GBI_STATIC_ASSERT(sizeof(Gfx) == 8, "Gfx must remain 8 bytes");
 #endif
 
 #define gSPSegment(pkt, segment, base)					\
-	gMoveWd(pkt, G_MW_SEGMENT, (segment)*4, _GBI_RUNTIME_PTR(base))
+	gMoveWd(pkt, G_MW_SEGMENT, (segment)*4, base)
 #ifdef TARGET_PC
 #define gsSPSegment(segment, base)                                       \
         _GBI_STATIC_COMMAND((_SHIFTL(G_MOVEWORD, 24, 8) |                \

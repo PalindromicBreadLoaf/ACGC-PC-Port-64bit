@@ -12,12 +12,17 @@ if(WIN32)
     if(NOT CMAKE_SIZEOF_VOID_P EQUAL 4)
         message(FATAL_ERROR "The supported Windows build uses the 32-bit ABI")
     endif()
-elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR APPLE)
     if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
-        message(FATAL_ERROR "The supported Linux build uses the 64-bit ABI")
+        message(FATAL_ERROR "The supported ${CMAKE_SYSTEM_NAME} build uses the 64-bit ABI")
     endif()
 else()
     message(FATAL_ERROR "Unsupported host platform: ${CMAKE_SYSTEM_NAME}")
+endif()
+
+if(APPLE)
+    # The SDK's fortified bcopy/bzero macros collide with libultra's declarations.
+    add_compile_definitions(_FORTIFY_SOURCE=0)
 endif()
 
 if(PC_BUILD_PORTABILITY_TESTS)
@@ -458,6 +463,20 @@ if(WIN32)
 else()
     find_package(OpenGL REQUIRED)
     target_link_libraries(ac_pc OpenGL::GL dl pthread m)
+endif()
+
+if(APPLE)
+    # JKRHeap replaces the global operator new/delete. dyld would bind every
+    # system framework to an exported replacement, and they allocate before the
+    # game's heap exists, so keep the replacements private to the executable.
+    target_link_options(ac_pc PRIVATE
+        -Wl,-unexported_symbol,__Znwm
+        -Wl,-unexported_symbol,__Znam
+        -Wl,-unexported_symbol,__ZdlPv
+        -Wl,-unexported_symbol,__ZdaPv
+        -Wl,-unexported_symbol,__ZdlPvm
+        -Wl,-unexported_symbol,__ZdaPvm
+    )
 endif()
 
 set_target_properties(ac_pc PROPERTIES

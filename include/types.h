@@ -7,6 +7,7 @@
 #include <string.h>
 #include <alloca.h>
 /* Metrowerks __alloca is a compiler built-in; map to standard alloca on PC */
+#undef __alloca
 #define __alloca alloca
 /* Metrowerks __declspec(section "...") is not supported by GCC.
  * GCC defines __declspec as a builtin keyword, so we must #undef it first. */

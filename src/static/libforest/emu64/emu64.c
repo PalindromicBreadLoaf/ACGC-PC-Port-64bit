@@ -5598,6 +5598,11 @@ void emu64::dl_G_MOVEMEM() {
             this->work_ptr = (void*)this->seg2k0(movemem->data);
             Vp_t* vp = (Vp_t*)this->work_ptr;
 
+#ifdef TARGET_PC
+            if (vp == NULL) {
+                break;
+            }
+#endif
 #ifdef EMU64_DEBUG
             if (this->print_commands != false) {
                 EMU64_LOGF("gsSPViewport(%s),", this->segchk(movemem->data));
@@ -5643,6 +5648,11 @@ void emu64::dl_G_MOVEMEM() {
                 case G_MVO_LOOKATX: {
                     EMU64_LOGF("gsSPLookAtX(%s),", this->segchk(movemem->data));
                     LookAt* la = (LookAt*)this->seg2k0(movemem->data);
+#ifdef TARGET_PC
+                    if (la == NULL) {
+                        break;
+                    }
+#endif
                     EMU64_INFOF(" /* {%3d,%3d,%3d} */", la->l->l.dir[0], la->l->l.dir[1], la->l->l.dir[2]);
                     this->lookAt.x.x = la->l->l.dir[0];
                     this->lookAt.x.y = la->l->l.dir[1];
@@ -5654,6 +5664,11 @@ void emu64::dl_G_MOVEMEM() {
                 case G_MVO_LOOKATY: {
                     EMU64_LOGF("gsSPLookAtY(%s),", this->segchk(movemem->data));
                     LookAt* la = (LookAt*)this->seg2k0(movemem->data);
+#ifdef TARGET_PC
+                    if (la == NULL) {
+                        break;
+                    }
+#endif
                     EMU64_INFOF(" /* {%3d,%3d,%3d} */", la->l->l.dir[0], la->l->l.dir[1], la->l->l.dir[2]);
                     this->lookAt.y.x = la->l->l.dir[0];
                     this->lookAt.y.y = la->l->l.dir[1];
@@ -5664,6 +5679,11 @@ void emu64::dl_G_MOVEMEM() {
 
                 default: {
                     Light_new* light = (Light_new*)this->seg2k0(movemem->data);
+#ifdef TARGET_PC
+                    if (light == NULL) {
+                        break;
+                    }
+#endif
                     int idx = movemem->offset * 8 - 24;
                     idx /= 24; /* Idx should be 1 - 8. There's more bithacks going on here, but I think it's compiler
                                   generated */

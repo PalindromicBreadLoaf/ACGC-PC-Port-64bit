@@ -183,7 +183,8 @@ static bool pc_rarc_open_internal(pc_rarc_view* view, const void* data, size_t s
             return false;
         }
         if ((file.flags_and_name_offset & PC_RARC_DIRECTORY_FLAG) != 0) {
-            if (file.data_offset >= view->info.node_count) {
+            /* The root directory's ".." entry has no parent node. */
+            if (file.data_offset >= view->info.node_count && file.data_offset != UINT32_MAX) {
                 return false;
             }
         } else if (file.data_offset > view->header.file_data_length ||

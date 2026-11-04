@@ -143,25 +143,61 @@ static int test_pointer_tokens(void) {
 }
 
 static int test_pointer_token_exhaustion(void) {
-    uint32_t tokens[PC_POINTER_TOKEN_CAPACITY];
+    static uint32_t tokens[PC_POINTER_TOKEN_CAPACITY];
     uint32_t overflow_token = 0u;
+    uint32_t permanent_token = 0u;
     uintptr_t resolved;
     uint32_t i;
 
+    /* A full registry recycles its least recently used tokens. */
     pc_pointer_token_reset(PC_POINTER_TOKEN_DOMAIN_GBI);
     for (i = 0u; i < PC_POINTER_TOKEN_CAPACITY; i++) {
         CHECK(pc_pointer_token_pack(PC_POINTER_TOKEN_DOMAIN_GBI, (uintptr_t)i + UINT32_C(0x10000), &tokens[i]) ==
               PC_POINTER_TOKEN_OK);
     }
     CHECK(pc_pointer_token_active_count(PC_POINTER_TOKEN_DOMAIN_GBI) == PC_POINTER_TOKEN_CAPACITY);
+    CHECK(pc_pointer_token_resolve(PC_POINTER_TOKEN_DOMAIN_GBI, tokens[0], &resolved) == PC_POINTER_TOKEN_OK);
+    CHECK(pc_pointer_token_pack(PC_POINTER_TOKEN_DOMAIN_GBI, UINT32_C(0xdeadbeef), &overflow_token) ==
+          PC_POINTER_TOKEN_OK);
+    CHECK(overflow_token != 0u);
+    CHECK(pc_pointer_token_active_count(PC_POINTER_TOKEN_DOMAIN_GBI) < PC_POINTER_TOKEN_CAPACITY);
+    CHECK(pc_pointer_token_resolve(PC_POINTER_TOKEN_DOMAIN_GBI, tokens[0], &resolved) == PC_POINTER_TOKEN_OK);
+    CHECK(resolved == UINT32_C(0x10000));
+    CHECK(pc_pointer_token_resolve(PC_POINTER_TOKEN_DOMAIN_GBI, tokens[1], &resolved) == PC_POINTER_TOKEN_STALE);
+    CHECK(pc_pointer_token_resolve(PC_POINTER_TOKEN_DOMAIN_GBI, tokens[PC_POINTER_TOKEN_CAPACITY - 1u], &resolved) ==
+          PC_POINTER_TOKEN_OK);
+
+    /* Recycling keeps working well past one table's worth of pointers. */
+    for (i = 0u; i < PC_POINTER_TOKEN_CAPACITY * 4u; i++) {
+        CHECK(pc_pointer_token_pack(PC_POINTER_TOKEN_DOMAIN_GBI, (uintptr_t)i + UINT32_C(0x100000), &overflow_token) ==
+              PC_POINTER_TOKEN_OK);
+        CHECK(pc_pointer_token_resolve(PC_POINTER_TOKEN_DOMAIN_GBI, overflow_token, &resolved) == PC_POINTER_TOKEN_OK);
+        CHECK(resolved == (uintptr_t)i + UINT32_C(0x100000));
+    }
+
+    /* Permanent tokens survive recycling, however long they go unused. */
+    pc_pointer_token_reset(PC_POINTER_TOKEN_DOMAIN_GBI);
+    CHECK(pc_pointer_token_pack_permanent(PC_POINTER_TOKEN_DOMAIN_GBI, UINT32_C(0x1234), &permanent_token) ==
+          PC_POINTER_TOKEN_OK);
+    for (i = 0u; i < PC_POINTER_TOKEN_CAPACITY * 2u; i++) {
+        CHECK(pc_pointer_token_pack(PC_POINTER_TOKEN_DOMAIN_GBI, (uintptr_t)i + UINT32_C(0x10000), &overflow_token) ==
+              PC_POINTER_TOKEN_OK);
+    }
+    CHECK(pc_pointer_token_resolve(PC_POINTER_TOKEN_DOMAIN_GBI, permanent_token, &resolved) == PC_POINTER_TOKEN_OK);
+    CHECK(resolved == UINT32_C(0x1234));
+
+    /* With nothing left to recycle, packing fails but known pointers still resolve. */
+    pc_pointer_token_reset(PC_POINTER_TOKEN_DOMAIN_GBI);
+    for (i = 0u; i < PC_POINTER_TOKEN_CAPACITY; i++) {
+        CHECK(pc_pointer_token_pack_permanent(PC_POINTER_TOKEN_DOMAIN_GBI, (uintptr_t)i + UINT32_C(0x10000), &tokens[i]) ==
+              PC_POINTER_TOKEN_OK);
+    }
+    overflow_token = 0u;
     CHECK(pc_pointer_token_pack(PC_POINTER_TOKEN_DOMAIN_GBI, UINT32_C(0xdeadbeef), &overflow_token) ==
           PC_POINTER_TOKEN_EXHAUSTED);
     CHECK(overflow_token == 0u);
-
-    CHECK(pc_pointer_token_release(PC_POINTER_TOKEN_DOMAIN_GBI, tokens[0]) == PC_POINTER_TOKEN_OK);
-    CHECK(pc_pointer_token_pack(PC_POINTER_TOKEN_DOMAIN_GBI, UINT32_C(0xdeadbeef), &overflow_token) ==
-          PC_POINTER_TOKEN_OK);
-    CHECK(pc_pointer_token_resolve(PC_POINTER_TOKEN_DOMAIN_GBI, tokens[0], &resolved) == PC_POINTER_TOKEN_STALE);
+    CHECK(pc_pointer_token_pack(PC_POINTER_TOKEN_DOMAIN_GBI, UINT32_C(0x10000), &overflow_token) == PC_POINTER_TOKEN_OK);
+    CHECK(overflow_token == tokens[0]);
     pc_pointer_token_reset(PC_POINTER_TOKEN_DOMAIN_GBI);
     return 0;
 }

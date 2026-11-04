@@ -8,11 +8,16 @@ static void pc_gbi_report_token_error(pc_pointer_token_result result, const char
     fprintf(stderr, "[GBI] %s: %s at %s:%d\n", pc_pointer_token_result_name(result), expr, file, line);
 }
 
+/* Game code also spells segmented addresses as pointers, e.g. (Mtx*)0x0D000040. */
+static int pc_gbi_is_segmented(uintptr_t addr) {
+    return addr >= UINT32_C(0x01000000) && addr < UINT32_C(0x10000000);
+}
+
 unsigned int pc_gbi_pack_runtime_ptr(uintptr_t addr, int is_ptr, const char* expr, const char* file, int line) {
     uint32_t token;
     pc_pointer_token_result result;
 
-    if (!is_ptr) {
+    if (!is_ptr || pc_gbi_is_segmented(addr)) {
         if (addr > UINT32_MAX || pc_pointer_token_is_token((uint32_t)addr)) {
             pc_gbi_report_token_error(PC_POINTER_TOKEN_INVALID_DOMAIN, expr, file, line);
             return 0u;
@@ -47,8 +52,8 @@ int pc_gbi_relocate_static_command(void* command) {
     }
 
     memcpy(&value, words + 2, sizeof(value));
-    if (words[1] == UINT32_C(0xfc000000)) {
-        result = pc_pointer_token_pack(PC_POINTER_TOKEN_DOMAIN_GBI, value, &packed);
+    if (words[1] == UINT32_C(0xfc000000) && !pc_gbi_is_segmented(value)) {
+        result = pc_pointer_token_pack_permanent(PC_POINTER_TOKEN_DOMAIN_GBI, value, &packed);
     } else if (value > UINT32_MAX || pc_pointer_token_is_token((uint32_t)value)) {
         result = PC_POINTER_TOKEN_INVALID_DOMAIN;
     } else {

@@ -520,7 +520,8 @@ static int aNPC_setupActor_proc(GAME_PLAY* play, mActor_name_t name, s8 idx, int
 
 #ifndef aNPC_NPC2
 #ifdef TARGET_PC
-#define aNPC_ACTOR_CLASS_SLOT_SIZE (sizeof(NPC_ACTOR) + 15)
+/* NPC profiles are larger than NPC_ACTOR, and pointer members grow them on 64-bit. */
+#define aNPC_ACTOR_CLASS_SLOT_SIZE 0x1000
 #else
 #define aNPC_ACTOR_CLASS_SLOT_SIZE 0x9D0
 #endif
