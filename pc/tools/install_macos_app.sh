@@ -60,6 +60,12 @@ DATA="$HOME/Library/Application Support/Animal Crossing"
 mkdir -p "$DATA/rom" "$DATA/save/card_a" "$DATA/save/card_b" "$DATA/texture_pack"
 ln -sfn "$HERE/../Resources/shaders" "$DATA/shaders"
 cd "$DATA" || exit 1
+# Cloud saves: when the cloudgames launcher is installed and knows this game, it downloads the
+# newest save before the game starts and uploads it after the game quits (https://cloudgames.fandoster.com).
+CG="$HOME/.local/bin/cloudgames"
+if [[ -x "$CG" ]] && "$CG" game list 2>/dev/null | grep -q '^animal-crossing-gc	'; then
+    exec "$CG" run animal-crossing-gc -- "$HERE/AnimalCrossing" "$@" > "$DATA/last-run.log" 2>&1
+fi
 exec "$HERE/AnimalCrossing" "$@" > "$DATA/last-run.log" 2>&1
 LAUNCHER
 chmod +x "$MACOS/Animal Crossing"
